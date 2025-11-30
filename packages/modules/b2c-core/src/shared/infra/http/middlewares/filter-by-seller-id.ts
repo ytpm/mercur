@@ -1,21 +1,30 @@
-import { NextFunction } from 'express'
+import { NextFunction } from "express";
 
-import { AuthenticatedMedusaRequest } from '@medusajs/framework/http'
+import { AuthenticatedMedusaRequest } from "@medusajs/framework/http";
 
-import { fetchSellerByAuthActorId } from '../utils/seller'
+import { fetchSellerByAuthContext } from "../utils/seller";
 
 /**
- * @desc Adds a seller id to the filterable fields
+ * Middleware that adds seller_id to filterable fields.
+ *
+ * BEFORE: Used actor_id (member.id) to look up seller
+ * AFTER: Uses app_metadata.active_seller_id directly
+ *
+ * This enables multi-vendor support where a user can have
+ * multiple memberships and filter by the currently active one.
  */
 export function filterBySellerId() {
   return async (req: AuthenticatedMedusaRequest, _, next: NextFunction) => {
-    const seller = await fetchSellerByAuthActorId(
-      req.auth_context.actor_id,
-      req.scope
-    )
+    const appMetadata = req.auth_context?.app_metadata;
 
-    req.filterableFields.seller_id = seller.id
+    console.log(
+      `[filterBySellerId] Fetching seller for active_seller_id: ${appMetadata?.active_seller_id}`
+    );
 
-    return next()
-  }
+    const seller = await fetchSellerByAuthContext(appMetadata, req.scope);
+
+    req.filterableFields.seller_id = seller.id;
+
+    return next();
+  };
 }

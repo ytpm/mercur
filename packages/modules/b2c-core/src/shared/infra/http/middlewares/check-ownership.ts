@@ -1,37 +1,51 @@
-import { NextFunction } from 'express'
+import { NextFunction } from "express";
 
-import { AuthenticatedMedusaRequest, MedusaResponse } from '@medusajs/framework'
+import {
+  AuthenticatedMedusaRequest,
+  MedusaResponse,
+} from "@medusajs/framework";
 import {
   ContainerRegistrationKeys,
-  MedusaError
-} from '@medusajs/framework/utils'
+  MedusaError,
+} from "@medusajs/framework/utils";
+
+/**
+ * Interface representing a seller membership in app_metadata.
+ */
+interface SellerMembership {
+  member_id: string;
+  seller_id: string;
+  role: string;
+}
 
 type CheckResourceOwnershipByResourceIdOptions<Body> = {
-  entryPoint: string
-  filterField?: string
-  resourceId?: (req: AuthenticatedMedusaRequest<Body>) => string
-}
+  entryPoint: string;
+  filterField?: string;
+  resourceId?: (req: AuthenticatedMedusaRequest<Body>) => string;
+};
 
 /**
  * Middleware that verifies if the authenticated member owns/has access to the requested resource.
- * This is done by checking if the member's seller ID matches the resource's seller ID.
+ *
+ * BEFORE (single-vendor): Queried member by actor_id, compared member.seller.id with resource.seller_id
+ * AFTER (multi-vendor): Uses active_seller_id from app_metadata, validates user has membership
  *
  * @param options - Configuration options for the ownership check
  * @param options.entryPoint - The entity type to verify ownership of (e.g. 'seller_product', 'service_zone')
  * @param options.filterField - Field used to filter/lookup the resource (defaults to 'id')
- * @param options.paramIdField - Request parameter containing the resource ID (defaults to 'id')
+ * @param options.resourceId - Function to extract resource ID from request (defaults to req.params.id)
  *
  * @throws {MedusaError} If the member does not own the resource
  *
  * @example
  * // Basic usage - check ownership of vendor product
- * app.use(checkResourceOwnershipByParamId({
+ * app.use(checkResourceOwnershipByResourceId({
  *   entryPoint: 'seller_product'
  * }))
  *
  * @example
  * // Custom field usage - check ownership of service zone
- * app.use(checkResourceOwnershipByParamId({
+ * app.use(checkResourceOwnershipByResourceId({
  *   entryPoint: 'service_zone',
  *   filterField: 'service_zone_id',
  *   resourceId: (req) => req.params.zone_id
@@ -39,57 +53,93 @@ type CheckResourceOwnershipByResourceIdOptions<Body> = {
  */
 export const checkResourceOwnershipByResourceId = <Body>({
   entryPoint,
-  filterField = 'id',
-  resourceId = (req) => req.params.id
+  filterField = "id",
+  resourceId = (req) => req.params.id,
 }: CheckResourceOwnershipByResourceIdOptions<Body>) => {
   return async (
     req: AuthenticatedMedusaRequest<Body>,
     res: MedusaResponse,
     next: NextFunction
   ) => {
-    const query = req.scope.resolve(ContainerRegistrationKeys.QUERY)
+    const query = req.scope.resolve(ContainerRegistrationKeys.QUERY);
+    const appMetadata = req.auth_context?.app_metadata;
+
+    // Get active seller from app_metadata
+    const activeSellerId = appMetadata?.active_seller_id;
+
+    console.log(
+      `[checkResourceOwnershipByResourceId] Checking ownership for active_seller_id: ${activeSellerId}`
+    );
+
+    if (!activeSellerId) {
+      console.error(
+        `[checkResourceOwnershipByResourceId] No active seller set`
+      );
+      res.status(401).json({
+        message: "No active seller set",
+        type: MedusaError.Types.UNAUTHORIZED,
+      });
+      return;
+    }
+
+    // Validate user has membership to active seller (security check)
+    const memberships: SellerMembership[] = Array.isArray(appMetadata?.seller_memberships)
+      ? appMetadata.seller_memberships
+      : [];
+    const hasMembership = memberships.some(
+      (m) => m.seller_id === activeSellerId
+    );
+
+    if (!hasMembership) {
+      console.error(
+        `[checkResourceOwnershipByResourceId] User is not a member of active seller ${activeSellerId}`
+      );
+      res.status(403).json({
+        message: "You are not a member of the active seller",
+        type: MedusaError.Types.NOT_ALLOWED,
+      });
+      return;
+    }
+
+    // Fetch the resource
+    const id = resourceId(req);
 
     const {
-      data: [member]
-    } = await query.graph(
-      {
-        entity: 'member',
-        fields: ['seller.id'],
-        filters: {
-          id: req.auth_context.actor_id
-        }
-      },
-      { throwIfKeyNotFound: true }
-    )
-
-    const id = resourceId(req)
-
-    const {
-      data: [resource]
+      data: [resource],
     } = await query.graph({
       entity: entryPoint,
-      fields: ['seller_id'],
+      fields: ["seller_id"],
       filters: {
-        [filterField]: id
-      }
-    })
+        [filterField]: id,
+      },
+    });
 
     if (!resource) {
+      console.log(
+        `[checkResourceOwnershipByResourceId] Resource ${entryPoint} with ${filterField}: ${id} not found`
+      );
       res.status(404).json({
         message: `${entryPoint} with ${filterField}: ${id} not found`,
-        type: MedusaError.Types.NOT_FOUND
-      })
-      return
+        type: MedusaError.Types.NOT_FOUND,
+      });
+      return;
     }
 
-    if (member.seller.id !== resource.seller_id) {
+    // Compare resource's seller_id with active_seller_id
+    if (activeSellerId !== resource.seller_id) {
+      console.log(
+        `[checkResourceOwnershipByResourceId] Access denied. active_seller_id: ${activeSellerId}, resource.seller_id: ${resource.seller_id}`
+      );
       res.status(403).json({
-        message: 'You are not allowed to perform this action',
-        type: MedusaError.Types.NOT_ALLOWED
-      })
-      return
+        message: "You are not allowed to perform this action",
+        type: MedusaError.Types.NOT_ALLOWED,
+      });
+      return;
     }
 
-    next()
-  }
-}
+    console.log(
+      `[checkResourceOwnershipByResourceId] Access granted for resource ${id}`
+    );
+    next();
+  };
+};
