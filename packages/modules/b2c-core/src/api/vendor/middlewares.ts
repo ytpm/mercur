@@ -16,6 +16,7 @@ import { vendorInventoryItemsMiddlewares } from "./inventory-items/middlewares";
 import { vendorInvitesMiddlewares } from "./invites/middlewares";
 import { vendorMeMiddlewares } from "./me/middlewares";
 import { vendorMembersMiddlewares } from "./members/middlewares";
+import { vendorMembershipsMiddlewares } from "./memberships/middlewares";
 import { vendorNotificationMiddlewares } from "./notifications/middlewares";
 import { vendorOrderMiddlewares } from "./orders/middlewares";
 import { vendorPayoutAccountMiddlewares } from "./payout-account/middlewares";
@@ -38,6 +39,7 @@ import { vendorShippingProfilesMiddlewares } from "./shipping-profiles/middlewar
 import { vendorStatisticsMiddlewares } from "./statistics/middlewares";
 import { vendorStockLocationsMiddlewares } from "./stock-locations/middlewares";
 import { vendorStoresMiddlewares } from "./stores/middlewares";
+import { vendorSwitchMiddlewares } from "./switch/middlewares";
 import { vendorUploadMiddlewares } from "./uploads/middlewares";
 
 export const vendorMiddlewares: MiddlewareRoute[] = [
@@ -122,4 +124,6 @@ export const vendorMiddlewares: MiddlewareRoute[] = [
   ...vendorNotificationMiddlewares,
   ...vendorAttributeMiddlewares,
   ...vendorPricePreferencesRoutesMiddlewares,
+  ...vendorSwitchMiddlewares,
+  ...vendorMembershipsMiddlewares,
 ];
