@@ -6,9 +6,18 @@ import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
 
 import { SellerTeamInviteEvent } from "@mercurjs/framework";
 
-import { fetchSellerByAuthActorId } from "../../../shared/infra/http/utils";
+import { fetchSellerByAuthContext } from "../../../shared/infra/http/utils";
 import { inviteMemberWorkflow } from "../../../workflows/seller/workflows";
 import { VendorInviteMemberType } from "./validators";
+
+/**
+ * Interface representing a seller membership in app_metadata.
+ */
+interface SellerMembership {
+  member_id: string;
+  seller_id: string;
+  role: string;
+}
 
 /**
  * @oas [post] /vendor/invites
@@ -42,12 +51,16 @@ export const POST = async (
   res: MedusaResponse
 ) => {
   const query = req.scope.resolve(ContainerRegistrationKeys.QUERY);
+  const appMetadata = req.auth_context?.app_metadata;
 
-  const seller = await fetchSellerByAuthActorId(
-    req.auth_context.actor_id,
-    req.scope,
-    ["id", "name"]
+  console.log(
+    `[POST /vendor/invites] Creating invite for active_seller_id: ${appMetadata?.active_seller_id}`
   );
+
+  const seller = await fetchSellerByAuthContext(appMetadata, req.scope, [
+    "id",
+    "name",
+  ]);
 
   const { result: created } = await inviteMemberWorkflow(req.scope).run({
     input: {
@@ -67,22 +80,34 @@ export const POST = async (
     { throwIfKeyNotFound: true }
   );
 
-  const {
-    data: [member],
-  } = await query.graph(
-    {
-      entity: "member",
-      fields: req.queryConfig.fields,
-      filters: { id: req.auth_context.actor_id },
-    },
-    { throwIfKeyNotFound: true }
+  // Get the current member from memberships (multi-vendor)
+  const memberships: SellerMembership[] = Array.isArray(appMetadata?.seller_memberships)
+    ? appMetadata.seller_memberships
+    : [];
+  const activeMembership = memberships.find(
+    (m) => m.seller_id === appMetadata?.active_seller_id
   );
+
+  let memberEmail: string | null = null;
+  if (activeMembership) {
+    const {
+      data: [member],
+    } = await query.graph(
+      {
+        entity: "member",
+        fields: ["email"],
+        filters: { id: activeMembership.member_id },
+      },
+      { throwIfKeyNotFound: true }
+    );
+    memberEmail = member.email;
+  }
 
   const eventBus = req.scope.resolve(Modules.EVENT_BUS);
   await eventBus.emit({
     name: SellerTeamInviteEvent.CREATED,
     data: {
-      user_name: member.email || seller.name,
+      user_name: memberEmail || seller.name,
       store_name: seller.name,
       token: created.token,
       id: invite.id,
