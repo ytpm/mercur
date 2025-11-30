@@ -7,7 +7,7 @@ import { Modules } from '@medusajs/framework/utils'
 
 import { IntermediateEvents } from '@mercurjs/framework'
 
-import { fetchSellerByAuthActorId } from '../../../../../../shared/infra/http/utils'
+import { fetchSellerByAuthContext } from '../../../../../../shared/infra/http/utils'
 import {
   prepareBatchInventoryLevelDeletePayload,
   validateOwnership
@@ -68,8 +68,9 @@ export const POST = async (
     }
   }
 
-  const seller = await fetchSellerByAuthActorId(
-    req.auth_context.actor_id,
+  const appMetadata = req.auth_context?.app_metadata;
+  const seller = await fetchSellerByAuthContext(
+    appMetadata,
     req.scope
   )
   await validateOwnership(req.scope, seller.id, batchInput.input)

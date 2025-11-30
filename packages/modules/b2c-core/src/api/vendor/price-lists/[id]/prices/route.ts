@@ -4,7 +4,7 @@ import {
 } from "@medusajs/framework";
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
 
-import { fetchSellerByAuthActorId } from "../../../../../shared/infra/http/utils";
+import { fetchSellerByAuthContext } from "../../../../../shared/infra/http/utils";
 import { createVendorPriceListPricesWorkflow } from "../../../../../workflows/price-list/workflows";
 import { VendorCreatePriceListPriceType } from "../../validators";
 
@@ -55,8 +55,9 @@ export const POST = async (
   const query = req.scope.resolve(ContainerRegistrationKeys.QUERY);
   const id = req.params.id;
 
-  const seller = await fetchSellerByAuthActorId(
-    req.auth_context.actor_id,
+  const appMetadata = req.auth_context?.app_metadata;
+  const seller = await fetchSellerByAuthContext(
+    appMetadata,
     req.scope
   );
 

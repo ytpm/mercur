@@ -2,7 +2,7 @@ import { AuthenticatedMedusaRequest, MedusaResponse } from '@medusajs/framework'
 import { ContainerRegistrationKeys } from '@medusajs/framework/utils'
 
 import sellerPriceList from '../../../links/seller-price-list'
-import { fetchSellerByAuthActorId } from '../../../shared/infra/http/utils'
+import { fetchSellerByAuthContext } from '../../../shared/infra/http/utils'
 import { createVendorPriceListWorkflow } from '../../../workflows/price-list/workflows'
 import { VendorCreatePriceListType } from './validators'
 
@@ -119,8 +119,9 @@ export const POST = async (
   req: AuthenticatedMedusaRequest<VendorCreatePriceListType>,
   res: MedusaResponse
 ) => {
-  const seller = await fetchSellerByAuthActorId(
-    req.auth_context.actor_id,
+  const appMetadata = req.auth_context?.app_metadata;
+  const seller = await fetchSellerByAuthContext(
+    appMetadata,
     req.scope
   )
 

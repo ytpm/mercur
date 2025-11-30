@@ -7,7 +7,7 @@ import { updateServiceZonesWorkflow } from "@medusajs/medusa/core-flows";
 
 import { IntermediateEvents } from "@mercurjs/framework";
 
-import { fetchSellerByAuthActorId } from "../../../../../../shared/infra/http/utils";
+import { fetchSellerByAuthContext } from "../../../../../../shared/infra/http/utils";
 import { deleteVendorServiceZonesWorkflow } from "../../../../../../workflows/fulfillment-set";
 import { VendorUpdateServiceZoneType } from "../../../validators";
 
@@ -139,8 +139,9 @@ export const DELETE = async (
 ) => {
   const { zone_id } = req.params;
 
-  const seller = await fetchSellerByAuthActorId(
-    req.auth_context.actor_id,
+  const appMetadata = req.auth_context?.app_metadata;
+  const seller = await fetchSellerByAuthContext(
+    appMetadata,
     req.scope
   );
   await deleteVendorServiceZonesWorkflow.run({
