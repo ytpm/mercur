@@ -35,15 +35,17 @@ export const GET = async (
   res: MedusaResponse
 ) => {
   const appMetadata = req.auth_context?.app_metadata;
+  const authIdentityId = req.auth_context?.auth_identity_id;
 
   console.log(
-    `[GET /vendor/sellers/me] Fetching seller for active_seller_id: ${appMetadata?.active_seller_id}`
+    `[GET /vendor/sellers/me] Fetching seller for active_seller_id: ${appMetadata?.active_seller_id}, auth_identity_id: ${authIdentityId}`
   );
 
   const seller = await fetchSellerByAuthContext(
     appMetadata,
     req.scope,
-    req.queryConfig.fields
+    req.queryConfig.fields,
+    authIdentityId
   );
 
   res.json({ seller });
@@ -82,12 +84,13 @@ export const POST = async (
 ) => {
   const query = req.scope.resolve(ContainerRegistrationKeys.QUERY);
   const appMetadata = req.auth_context?.app_metadata;
+  const authIdentityId = req.auth_context?.auth_identity_id;
 
   console.log(
-    `[POST /vendor/sellers/me] Updating seller for active_seller_id: ${appMetadata?.active_seller_id}`
+    `[POST /vendor/sellers/me] Updating seller for active_seller_id: ${appMetadata?.active_seller_id}, auth_identity_id: ${authIdentityId}`
   );
 
-  const { id } = await fetchSellerByAuthContext(appMetadata, req.scope);
+  const { id } = await fetchSellerByAuthContext(appMetadata, req.scope, ["id"], authIdentityId);
 
   await updateSellerWorkflow(req.scope).run({
     input: {

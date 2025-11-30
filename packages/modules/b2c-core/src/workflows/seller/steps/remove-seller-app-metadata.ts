@@ -13,7 +13,7 @@ interface SellerMembership {
 /**
  * Result returned when membership is removed.
  */
-interface RemoveResult {
+export interface RemoveResult {
   /** Whether a membership was removed */
   removed: boolean;
   /** Whether the user should be logged out (no vendors left) */

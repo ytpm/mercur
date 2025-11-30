@@ -23,14 +23,18 @@ export const storeActiveGuard = async (
   next: NextFunction
 ) => {
   const appMetadata = req.auth_context?.app_metadata;
+  const authIdentityId = req.auth_context?.auth_identity_id;
 
   console.log(
-    `[storeActiveGuard] Checking store status for active_seller_id: ${appMetadata?.active_seller_id}`
+    `[storeActiveGuard] Checking store status for active_seller_id: ${appMetadata?.active_seller_id}, auth_identity_id: ${authIdentityId}`
   );
 
-  const seller = await fetchSellerByAuthContext(appMetadata, req.scope, [
-    "store_status",
-  ]);
+  const seller = await fetchSellerByAuthContext(
+    appMetadata,
+    req.scope,
+    ["store_status"],
+    authIdentityId
+  );
 
   const isActiveStore = seller.store_status === StoreStatus.ACTIVE;
   const isGetRequest = req.method === "GET";

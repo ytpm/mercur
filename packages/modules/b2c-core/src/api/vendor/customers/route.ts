@@ -61,9 +61,12 @@ export const GET = async (
   res: MedusaResponse
 ) => {
   const appMetadata = req.auth_context?.app_metadata;
+  const authIdentityId = req.auth_context?.auth_identity_id;
   const seller = await fetchSellerByAuthContext(
     appMetadata,
-    req.scope
+    req.scope,
+    ["id"],
+    authIdentityId
   );
 
   const { customers, count } = await selectSellerCustomers(

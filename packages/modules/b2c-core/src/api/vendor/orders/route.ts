@@ -106,9 +106,12 @@ export const GET = async (
   const query = req.scope.resolve(ContainerRegistrationKeys.QUERY)
 
   const appMetadata = req.auth_context?.app_metadata;
+  const authIdentityId = req.auth_context?.auth_identity_id;
   const seller = await fetchSellerByAuthContext(
     appMetadata,
-    req.scope
+    req.scope,
+    ["id"],
+    authIdentityId
   )
 
   const { data: orderRelations } = await query.graph({

@@ -77,10 +77,14 @@ export const vendorMiddlewares: MiddlewareRoute[] = [
         /^\/vendor\/(sellers|invites\/accept)$/,
         checkSellerApproved(["bearer", "session"])
       ),
+      // NOTE: allowUnregistered must be true for multi-vendor support.
+      // The JWT no longer contains actor_id; instead, we use active_seller_id
+      // stored in app_metadata. checkSellerApproved validates the seller,
+      // and authenticate just needs to verify auth_identity_id exists.
       unlessBaseUrl(
         /^\/vendor\/(sellers|invites\/accept)$/,
         authenticate("seller", ["bearer", "session"], {
-          allowUnregistered: false,
+          allowUnregistered: true,
         })
       ),
       unlessBaseUrl(

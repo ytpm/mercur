@@ -1,6 +1,6 @@
 import { AuthenticatedMedusaRequest } from "@medusajs/framework";
 import { MedusaResponse } from "@medusajs/framework";
-import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
+import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
 
 /**
  * Interface representing a seller membership in app_metadata.
@@ -42,7 +42,15 @@ export const GET = async (
   res: MedusaResponse
 ) => {
   const query = req.scope.resolve(ContainerRegistrationKeys.QUERY);
-  const appMetadata = req.auth_context?.app_metadata;
+  const authIdentityId = req.auth_context?.auth_identity_id;
+
+  // Fetch fresh app_metadata from DB since JWT only contains partial data
+  let appMetadata: Record<string, any> = {};
+  if (authIdentityId) {
+    const authService = req.scope.resolve(Modules.AUTH);
+    const authIdentity = await authService.retrieveAuthIdentity(authIdentityId);
+    appMetadata = authIdentity?.app_metadata || {};
+  }
 
   const activeSellerId = appMetadata?.active_seller_id;
   const memberships: SellerMembership[] = Array.isArray(appMetadata?.seller_memberships)
@@ -50,7 +58,7 @@ export const GET = async (
     : [];
 
   console.log(
-    `[GET /vendor/me] Fetching member for active_seller_id: ${activeSellerId}`
+    `[GET /vendor/me] Fetching member for active_seller_id: ${activeSellerId}, auth_identity_id: ${authIdentityId}`
   );
 
   // Validate active seller is set

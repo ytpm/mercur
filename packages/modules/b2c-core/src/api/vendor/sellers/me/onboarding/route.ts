@@ -32,10 +32,13 @@ export const GET = async (
 ) => {
   const query = req.scope.resolve(ContainerRegistrationKeys.QUERY)
   const appMetadata = req.auth_context?.app_metadata;
-  console.log('[Seller Onboarding Route GET] Fetching seller with app_metadata:', appMetadata);
+  const authIdentityId = req.auth_context?.auth_identity_id;
+  console.log(`[Seller Onboarding Route GET] Fetching seller with active_seller_id: ${appMetadata?.active_seller_id}, auth_identity_id: ${authIdentityId}`);
   const seller = await fetchSellerByAuthContext(
     appMetadata,
-    req.scope
+    req.scope,
+    ["id"],
+    authIdentityId
   )
 
   const {
@@ -79,10 +82,13 @@ export const POST = async (
 ) => {
   const query = req.scope.resolve(ContainerRegistrationKeys.QUERY)
   const appMetadata = req.auth_context?.app_metadata;
-  console.log('[Seller Onboarding Route POST] Fetching seller with app_metadata:', appMetadata);
+  const authIdentityId = req.auth_context?.auth_identity_id;
+  console.log(`[Seller Onboarding Route POST] Fetching seller with active_seller_id: ${appMetadata?.active_seller_id}, auth_identity_id: ${authIdentityId}`);
   const seller = await fetchSellerByAuthContext(
     appMetadata,
-    req.scope
+    req.scope,
+    ["id"],
+    authIdentityId
   )
 
   await recalculateOnboardingWorkflow.run({

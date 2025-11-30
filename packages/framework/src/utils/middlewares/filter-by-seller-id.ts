@@ -1,18 +1,24 @@
 import { NextFunction } from "express";
 
 import { AuthenticatedMedusaRequest } from "@medusajs/framework/http";
+import { MedusaError } from "@medusajs/framework/utils";
 
-import { fetchSellerByAuthActorId } from "../seller";
+import { fetchSellerFromRequest } from "../seller";
 
 /**
- * @desc Adds a seller id to the filterable fields
+ * Adds a seller id to the filterable fields.
+ * Supports multi-vendor by using active_seller_id from app_metadata.
  */
 export function filterBySellerId() {
   return async (req: AuthenticatedMedusaRequest, _, next: NextFunction) => {
-    const seller = await fetchSellerByAuthActorId(
-      req.auth_context.actor_id,
-      req.scope
-    );
+    const seller = await fetchSellerFromRequest(req);
+
+    if (!seller) {
+      throw new MedusaError(
+        MedusaError.Types.UNAUTHORIZED,
+        "No active seller found"
+      );
+    }
 
     req.filterableFields.seller_id = seller.id;
 
