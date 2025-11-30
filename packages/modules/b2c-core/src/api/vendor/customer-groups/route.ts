@@ -5,7 +5,7 @@ import {
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
 
 import sellerCustomerGroup from "../../../links/seller-customer-group";
-import { fetchSellerByAuthActorId } from "../../../shared/infra/http/utils";
+import { fetchSellerByAuthContext } from "../../../shared/infra/http/utils";
 import { createSellerCustomerGroupWorkflow } from "../../../workflows/customer-groups/workflows";
 import { VendorCreateCustomerGroupType } from "./validators";
 
@@ -115,8 +115,9 @@ export const POST = async (
   req: AuthenticatedMedusaRequest<VendorCreateCustomerGroupType>,
   res: MedusaResponse
 ) => {
-  const seller = await fetchSellerByAuthActorId(
-    req.auth_context.actor_id,
+  const appMetadata = req.auth_context?.app_metadata;
+  const seller = await fetchSellerByAuthContext(
+    appMetadata,
     req.scope
   );
 

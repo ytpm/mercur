@@ -5,7 +5,7 @@ import {
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
 
 import sellerCampaign from "../../../links/seller-campaign";
-import { fetchSellerByAuthActorId } from "../../../shared/infra/http/utils";
+import { fetchSellerByAuthContext } from "../../../shared/infra/http/utils";
 import { createVendorCampaignWorkflow } from "../../../workflows/campaigns/workflows";
 import { VendorCreateCampaignType } from "./validators";
 
@@ -130,8 +130,9 @@ export const POST = async (
   res: MedusaResponse
 ) => {
   const query = req.scope.resolve(ContainerRegistrationKeys.QUERY);
-  const seller = await fetchSellerByAuthActorId(
-    req.auth_context?.actor_id,
+  const appMetadata = req.auth_context?.app_metadata;
+  const seller = await fetchSellerByAuthContext(
+    appMetadata,
     req.scope
   );
 

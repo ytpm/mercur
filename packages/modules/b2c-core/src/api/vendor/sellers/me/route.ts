@@ -1,15 +1,18 @@
-import { AuthenticatedMedusaRequest, MedusaResponse } from '@medusajs/framework'
-import { ContainerRegistrationKeys } from '@medusajs/framework/utils'
+import {
+  AuthenticatedMedusaRequest,
+  MedusaResponse,
+} from "@medusajs/framework";
+import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
 
-import { fetchSellerByAuthActorId } from '../../../../shared/infra/http/utils/seller'
-import { updateSellerWorkflow } from '../../../../workflows/seller/workflows'
-import { VendorUpdateSellerType } from '../validators'
+import { fetchSellerByAuthContext } from "../../../../shared/infra/http/utils/seller";
+import { updateSellerWorkflow } from "../../../../workflows/seller/workflows";
+import { VendorUpdateSellerType } from "../validators";
 
 /**
  * @oas [get] /vendor/sellers/me
  * operationId: "VendorGetSellerMe"
  * summary: "Get Current Seller"
- * description: "Retrieves the seller associated with the authenticated user."
+ * description: "Retrieves the seller associated with the authenticated user for the active vendor context."
  * x-authenticated: true
  * responses:
  *   "200":
@@ -31,20 +34,26 @@ export const GET = async (
   req: AuthenticatedMedusaRequest,
   res: MedusaResponse
 ) => {
-  const seller = await fetchSellerByAuthActorId(
-    req.auth_context.actor_id,
+  const appMetadata = req.auth_context?.app_metadata;
+
+  console.log(
+    `[GET /vendor/sellers/me] Fetching seller for active_seller_id: ${appMetadata?.active_seller_id}`
+  );
+
+  const seller = await fetchSellerByAuthContext(
+    appMetadata,
     req.scope,
     req.queryConfig.fields
-  )
+  );
 
-  res.json({ seller })
-}
+  res.json({ seller });
+};
 
 /**
  * @oas [post] /vendor/sellers/me
  * operationId: "VendorUpdateSellerMe"
  * summary: "Update Current Seller"
- * description: "Updates the seller associated with the authenticated user."
+ * description: "Updates the seller associated with the authenticated user for the active vendor context."
  * x-authenticated: true
  * requestBody:
  *   content:
@@ -71,29 +80,32 @@ export const POST = async (
   req: AuthenticatedMedusaRequest<VendorUpdateSellerType>,
   res: MedusaResponse
 ) => {
-  const query = req.scope.resolve(ContainerRegistrationKeys.QUERY)
-  const { id } = await fetchSellerByAuthActorId(
-    req.auth_context.actor_id,
-    req.scope
-  )
+  const query = req.scope.resolve(ContainerRegistrationKeys.QUERY);
+  const appMetadata = req.auth_context?.app_metadata;
+
+  console.log(
+    `[POST /vendor/sellers/me] Updating seller for active_seller_id: ${appMetadata?.active_seller_id}`
+  );
+
+  const { id } = await fetchSellerByAuthContext(appMetadata, req.scope);
 
   await updateSellerWorkflow(req.scope).run({
     input: {
       id,
-      ...req.validatedBody
-    }
-  })
+      ...req.validatedBody,
+    },
+  });
 
   const {
-    data: [seller]
+    data: [seller],
   } = await query.graph(
     {
-      entity: 'seller',
+      entity: "seller",
       fields: req.queryConfig.fields,
-      filters: { id }
+      filters: { id },
     },
     { throwIfKeyNotFound: true }
-  )
+  );
 
-  res.json({ seller })
-}
+  res.json({ seller });
+};

@@ -12,7 +12,7 @@ import {
   updateProductVariantsWorkflow,
 } from "@medusajs/medusa/core-flows";
 
-import { fetchSellerByAuthActorId } from "../../../../../../shared/infra/http/utils";
+import { fetchSellerByAuthContext } from "../../../../../../shared/infra/http/utils";
 import { fetchProductDetails } from "../../../../../../shared/infra/http/utils/products";
 import { UpdateProductVariantType } from "../../../validators";
 import { ProductUpdateRequestUpdatedEvent } from "@mercurjs/framework";
@@ -164,8 +164,10 @@ export const POST = async (
     const { prices, ...rest } = req.validatedBody;
     // Check if there are other changes than prices
     if (rest) {
-      const seller = await fetchSellerByAuthActorId(
-        req.auth_context.actor_id,
+      const appMetadata = req.auth_context?.app_metadata;
+      console.log('[Product Variant Route POST] Fetching seller with app_metadata:', appMetadata);
+      const seller = await fetchSellerByAuthContext(
+        appMetadata,
         req.scope
       );
       const eventBus = req.scope.resolve(Modules.EVENT_BUS);

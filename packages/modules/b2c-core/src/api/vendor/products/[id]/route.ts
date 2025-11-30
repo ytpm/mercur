@@ -9,7 +9,7 @@ import {
   updateProductsWorkflow,
 } from "@medusajs/medusa/core-flows";
 
-import { fetchSellerByAuthActorId } from "../../../../shared/infra/http/utils";
+import { fetchSellerByAuthContext } from "../../../../shared/infra/http/utils";
 import { fetchProductDetails } from "../../../../shared/infra/http/utils/products";
 import {
   VendorGetProductParamsType,
@@ -131,8 +131,9 @@ export const POST = async (
 
   const productDetails = await fetchProductDetails(req.params.id, req.scope);
   if (!["draft", "proposed"].includes(productDetails.status)) {
-    const seller = await fetchSellerByAuthActorId(
-      req.auth_context.actor_id,
+    const appMetadata = req.auth_context?.app_metadata;
+    const seller = await fetchSellerByAuthContext(
+      appMetadata,
       req.scope
     );
     const eventBus = req.scope.resolve(Modules.EVENT_BUS);

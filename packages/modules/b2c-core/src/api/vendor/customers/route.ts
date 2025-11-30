@@ -5,7 +5,7 @@ import {
 
 import { selectSellerCustomers } from "../../../modules/seller";
 
-import { fetchSellerByAuthActorId } from "../../../shared/infra/http/utils";
+import { fetchSellerByAuthContext } from "../../../shared/infra/http/utils";
 
 /**
  * @oas [get] /vendor/customers
@@ -60,8 +60,9 @@ export const GET = async (
   req: AuthenticatedMedusaRequest,
   res: MedusaResponse
 ) => {
-  const seller = await fetchSellerByAuthActorId(
-    req.auth_context.actor_id,
+  const appMetadata = req.auth_context?.app_metadata;
+  const seller = await fetchSellerByAuthContext(
+    appMetadata,
     req.scope
   );
 

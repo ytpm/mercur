@@ -1,7 +1,7 @@
 import { AuthenticatedMedusaRequest, MedusaResponse } from '@medusajs/framework'
 import { ContainerRegistrationKeys } from '@medusajs/framework/utils'
 
-import { fetchSellerByAuthActorId } from '../../../../../shared/infra/http/utils'
+import { fetchSellerByAuthContext } from '../../../../../shared/infra/http/utils'
 import { recalculateOnboardingWorkflow } from '../../../../../workflows/seller/workflows'
 
 /**
@@ -31,8 +31,10 @@ export const GET = async (
   res: MedusaResponse
 ) => {
   const query = req.scope.resolve(ContainerRegistrationKeys.QUERY)
-  const seller = await fetchSellerByAuthActorId(
-    req.auth_context.actor_id,
+  const appMetadata = req.auth_context?.app_metadata;
+  console.log('[Seller Onboarding Route GET] Fetching seller with app_metadata:', appMetadata);
+  const seller = await fetchSellerByAuthContext(
+    appMetadata,
     req.scope
   )
 
@@ -76,8 +78,10 @@ export const POST = async (
   res: MedusaResponse
 ) => {
   const query = req.scope.resolve(ContainerRegistrationKeys.QUERY)
-  const seller = await fetchSellerByAuthActorId(
-    req.auth_context.actor_id,
+  const appMetadata = req.auth_context?.app_metadata;
+  console.log('[Seller Onboarding Route POST] Fetching seller with app_metadata:', appMetadata);
+  const seller = await fetchSellerByAuthContext(
+    appMetadata,
     req.scope
   )
 

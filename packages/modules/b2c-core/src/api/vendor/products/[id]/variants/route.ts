@@ -5,7 +5,7 @@ import {
 import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
 import { createProductVariantsWorkflow } from "@medusajs/medusa/core-flows";
 
-import { fetchSellerByAuthActorId } from "../../../../../shared/infra/http/utils";
+import { fetchSellerByAuthContext } from "../../../../../shared/infra/http/utils";
 import { fetchProductDetails } from "../../../../../shared/infra/http/utils/products";
 import { CreateProductVariantType } from "../../validators";
 import { ProductUpdateRequestUpdatedEvent } from "@mercurjs/framework";
@@ -56,8 +56,10 @@ export const POST = async (
 ) => {
   const query = req.scope.resolve(ContainerRegistrationKeys.QUERY);
 
-  const seller = await fetchSellerByAuthActorId(
-    req.auth_context.actor_id,
+  const appMetadata = req.auth_context?.app_metadata;
+  console.log('[Product Variants Route POST] Fetching seller with app_metadata:', appMetadata);
+  const seller = await fetchSellerByAuthContext(
+    appMetadata,
     req.scope
   );
 

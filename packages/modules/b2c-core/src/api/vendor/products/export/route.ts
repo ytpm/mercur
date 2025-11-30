@@ -1,14 +1,16 @@
 import { AuthenticatedMedusaRequest, MedusaResponse } from '@medusajs/framework'
 
-import { fetchSellerByAuthActorId } from '../../../../shared/infra/http/utils'
+import { fetchSellerByAuthContext } from '../../../../shared/infra/http/utils'
 import { exportSellerProductsWorkflow } from '../../../../workflows/seller/workflows'
 
 export const POST = async (
   req: AuthenticatedMedusaRequest,
   res: MedusaResponse
 ) => {
-  const seller = await fetchSellerByAuthActorId(
-    req.auth_context.actor_id,
+  const appMetadata = req.auth_context?.app_metadata;
+  console.log('[Products Export Route] Fetching seller with app_metadata:', appMetadata);
+  const seller = await fetchSellerByAuthContext(
+    appMetadata,
     req.scope
   )
 

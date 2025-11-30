@@ -2,7 +2,7 @@ import { AuthenticatedMedusaRequest, MedusaResponse } from '@medusajs/framework'
 import { ContainerRegistrationKeys } from '@medusajs/framework/utils'
 
 import sellerOrderLink from '../../../links/seller-order'
-import { fetchSellerByAuthActorId } from '../../../shared/infra/http/utils'
+import { fetchSellerByAuthContext } from '../../../shared/infra/http/utils'
 import { getVendorOrdersListWorkflow } from '../../../workflows/order/workflows'
 import { VendorGetOrderParamsType } from './validators'
 
@@ -105,8 +105,9 @@ export const GET = async (
 ) => {
   const query = req.scope.resolve(ContainerRegistrationKeys.QUERY)
 
-  const seller = await fetchSellerByAuthActorId(
-    req.auth_context.actor_id,
+  const appMetadata = req.auth_context?.app_metadata;
+  const seller = await fetchSellerByAuthContext(
+    appMetadata,
     req.scope
   )
 
