@@ -4,7 +4,7 @@ import {
 } from '@medusajs/framework/http'
 import { ContainerRegistrationKeys, RuleType } from '@medusajs/framework/utils'
 
-import { fetchSellerByAuthActorId } from '../../../../../../shared/infra/http/utils'
+import { fetchSellerByAuthContext } from '../../../../../../shared/infra/http/utils'
 import { batchVendorPromotionRulesWorkflow } from '../../../../../../workflows/promotions/workflows'
 import { VendorBatchPromotionRulesType } from '../../../validators'
 
@@ -49,8 +49,10 @@ export const POST = async (
   const query = req.scope.resolve(ContainerRegistrationKeys.QUERY)
   const id = req.params.id
 
-  const seller = await fetchSellerByAuthActorId(
-    req.auth_context.actor_id,
+  const appMetadata = req.auth_context?.app_metadata;
+  console.log('[Promotions Buy Rules Batch Route] Fetching seller with app_metadata:', appMetadata);
+  const seller = await fetchSellerByAuthContext(
+    appMetadata,
     req.scope
   )
 

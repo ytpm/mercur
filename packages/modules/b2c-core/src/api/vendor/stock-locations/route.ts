@@ -9,7 +9,7 @@ import { IntermediateEvents } from "@mercurjs/framework";
 import { SELLER_MODULE } from "../../../modules/seller";
 
 import sellerStockLocationLink from "../../../links/seller-stock-location";
-import { fetchSellerByAuthActorId } from "../../../shared/infra/http/utils";
+import { fetchSellerByAuthContext } from "../../../shared/infra/http/utils";
 import { VendorCreateStockLocationType } from "./validators";
 
 /**
@@ -51,8 +51,10 @@ export const POST = async (
 ) => {
   const query = req.scope.resolve(ContainerRegistrationKeys.QUERY);
   const remoteLink = req.scope.resolve(ContainerRegistrationKeys.REMOTE_LINK);
-  const seller = await fetchSellerByAuthActorId(
-    req.auth_context.actor_id,
+  const appMetadata = req.auth_context?.app_metadata;
+  console.log('[Stock Locations Route] Fetching seller with app_metadata:', appMetadata);
+  const seller = await fetchSellerByAuthContext(
+    appMetadata,
     req.scope
   );
 

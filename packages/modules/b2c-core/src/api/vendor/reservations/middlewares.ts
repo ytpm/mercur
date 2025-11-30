@@ -15,7 +15,7 @@ import {
 import sellerInventoryItem from '../../../links/seller-inventory-item'
 import sellerStockLocation from '../../../links/seller-stock-location'
 import { filterBySellerId } from '../../../shared/infra/http/middlewares'
-import { fetchSellerByAuthActorId } from '../../../shared/infra/http/utils'
+import { fetchSellerByAuthContext } from '../../../shared/infra/http/utils'
 import { vendorReservationQueryConfig } from './query-config'
 import {
   VendorCreateReservation,
@@ -60,8 +60,10 @@ const checkReservationOwnership = () => {
       }
     })
 
-    const seller = await fetchSellerByAuthActorId(
-      req.auth_context.actor_id,
+    const appMetadata = req.auth_context?.app_metadata;
+    console.log('[Reservations Middleware checkReservationOwnership] Fetching seller with app_metadata:', appMetadata);
+    const seller = await fetchSellerByAuthContext(
+      appMetadata,
       req.scope
     )
 
@@ -85,8 +87,10 @@ const canCreateReservation = () => {
   ) => {
     const query = req.scope.resolve(ContainerRegistrationKeys.QUERY)
 
-    const seller = await fetchSellerByAuthActorId(
-      req.auth_context.actor_id,
+    const appMetadata = req.auth_context?.app_metadata;
+    console.log('[Reservations Middleware canCreateReservation] Fetching seller with app_metadata:', appMetadata);
+    const seller = await fetchSellerByAuthContext(
+      appMetadata,
       req.scope
     )
 

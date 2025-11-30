@@ -1,7 +1,7 @@
 import { AuthenticatedMedusaRequest, MedusaResponse } from '@medusajs/framework'
 import { ContainerRegistrationKeys } from '@medusajs/framework/utils'
 
-import { fetchSellerByAuthActorId } from '../../../shared/infra/http/utils'
+import { fetchSellerByAuthContext } from '../../../shared/infra/http/utils'
 
 export const GET = async (
   req: AuthenticatedMedusaRequest,
@@ -10,8 +10,10 @@ export const GET = async (
   const logger = req.scope.resolve(ContainerRegistrationKeys.LOGGER)
   const { VITE_TALK_JS_APP_ID, VITE_TALK_JS_SECRET_API_KEY } = process.env
 
-  const seller = await fetchSellerByAuthActorId(
-    req.auth_context.actor_id,
+  const appMetadata = req.auth_context?.app_metadata;
+  console.log('[TalkJS Route] Fetching seller with app_metadata:', appMetadata);
+  const seller = await fetchSellerByAuthContext(
+    appMetadata,
     req.scope
   )
 

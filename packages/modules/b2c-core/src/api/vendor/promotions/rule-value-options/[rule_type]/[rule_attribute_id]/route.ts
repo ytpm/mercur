@@ -14,7 +14,7 @@ import { validateRuleType } from '@medusajs/medusa/api/admin/promotions/utils/va
 
 import sellerCustomerGroup from '../../../../../../links/seller-customer-group'
 import sellerProduct from '../../../../../../links/seller-product'
-import { fetchSellerByAuthActorId } from '../../../../../../shared/infra/http/utils'
+import { fetchSellerByAuthContext } from '../../../../../../shared/infra/http/utils'
 
 /**
  * @oas [get] /vendor/promotions/rule-attribute-options/{rule_type}
@@ -107,8 +107,10 @@ export const GET = async (
     applicationMethodType: applicationMethodType as ApplicationMethodTypeValues
   })
 
-  const seller = await fetchSellerByAuthActorId(
-    req.auth_context.actor_id,
+  const appMetadata = req.auth_context?.app_metadata;
+  console.log('[Promotions Rule Value Options Route] Fetching seller with app_metadata:', appMetadata);
+  const seller = await fetchSellerByAuthContext(
+    appMetadata,
     req.scope
   )
 

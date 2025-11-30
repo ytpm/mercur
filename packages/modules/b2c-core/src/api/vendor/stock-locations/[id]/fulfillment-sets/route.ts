@@ -6,7 +6,7 @@ import { ContainerRegistrationKeys, Modules } from "@medusajs/framework/utils";
 
 import { IntermediateEvents } from "@mercurjs/framework";
 
-import { fetchSellerByAuthActorId } from "../../../../../shared/infra/http/utils";
+import { fetchSellerByAuthContext } from "../../../../../shared/infra/http/utils";
 import { createLocationFulfillmentSetAndAssociateWithSellerWorkflow } from "../../../../../workflows/fulfillment-set";
 import { VendorCreateStockLocationFulfillmentSetType } from "../../validators";
 
@@ -55,8 +55,10 @@ export const POST = async (
 ) => {
   const query = req.scope.resolve(ContainerRegistrationKeys.QUERY);
 
-  const seller = await fetchSellerByAuthActorId(
-    req.auth_context.actor_id,
+  const appMetadata = req.auth_context?.app_metadata;
+  console.log('[Stock Location Fulfillment Sets Route] Fetching seller with app_metadata:', appMetadata);
+  const seller = await fetchSellerByAuthContext(
+    appMetadata,
     req.scope
   );
 
