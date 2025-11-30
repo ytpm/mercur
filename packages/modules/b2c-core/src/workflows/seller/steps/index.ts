@@ -19,3 +19,6 @@ export * from "./update-member-invite";
 export * from "./delete-member-invite";
 export * from "./send-invitation-email";
 export * from "./create-seller-shipping-profile";
+export * from "./set-seller-app-metadata";
+export * from "./remove-seller-app-metadata";
+export * from "./sync-member-role-app-metadata";
