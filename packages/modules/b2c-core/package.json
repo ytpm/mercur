@@ -1,10 +1,14 @@
 {
-  "name": "@mercurjs/b2c-core",
+  "name": "@ytpm/mercurjs-b2c-core",
   "version": "1.4.3",
   "author": "MercurJS <hello@mercurjs.com> (https://mercurjs.com)",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mercurjs/mercur"
+    "url": "https://github.com/ytpm/bumpy.fm.git",
+    "directory": "mercur-fork/packages/modules/b2c-core"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
   },
   "license": "MIT",
   "keywords": [
@@ -42,7 +46,7 @@
     "@medusajs/test-utils": "2.10.2",
     "@medusajs/ui": "4.0.25",
     "@medusajs/icons": "2.10.2",
-    "@mercurjs/framework": "*",
+    "@ytpm/mercurjs-framework": "*",
     "@mikro-orm/cli": "6.4.3",
     "@mikro-orm/core": "6.4.3",
     "@mikro-orm/knex": "6.4.3",
@@ -70,7 +74,7 @@
     "@medusajs/medusa": "2.10.2",
     "@medusajs/ui": "4.0.25",
     "@medusajs/icons": "2.10.2",
-    "@mercurjs/framework": "*",
+    "@ytpm/mercurjs-framework": "*",
     "@mikro-orm/cli": "6.4.3",
     "@mikro-orm/core": "6.4.3",
     "@mikro-orm/knex": "6.4.3",
