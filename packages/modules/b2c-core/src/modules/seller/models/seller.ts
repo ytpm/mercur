@@ -1,6 +1,6 @@
 import { model } from "@medusajs/framework/utils";
 
-import { StoreStatus } from "@mercurjs/framework";
+import { SellerPaymentMode, StoreStatus } from "@mercurjs/framework";
 import { MemberInvite } from "./invite";
 import { Member } from "./member";
 import { SellerOnboarding } from "./onboarding";
@@ -8,6 +8,14 @@ import { SellerOnboarding } from "./onboarding";
 export const Seller = model.define("seller", {
   id: model.id({ prefix: "sel" }).primaryKey(),
   store_status: model.enum(StoreStatus).default(StoreStatus.ACTIVE),
+  /**
+   * Payment mode for the seller.
+   * - STRIPE_CONNECT: Payments go to vendor's Connect account with automatic commission
+   * - PLATFORM: Payments go to platform, manual payout to vendor
+   */
+  payment_mode: model
+    .enum(SellerPaymentMode)
+    .default(SellerPaymentMode.PLATFORM),
   name: model.text().searchable(),
   handle: model.text().unique(),
   description: model.text().searchable().nullable(),

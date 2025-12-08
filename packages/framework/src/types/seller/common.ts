@@ -4,9 +4,22 @@ export enum StoreStatus {
   SUSPENDED = "SUSPENDED",
 }
 
+/**
+ * Payment mode enum for sellers.
+ * Determines how payments are processed and where funds are directed.
+ */
+export enum SellerPaymentMode {
+  /** Payments processed through vendor's Stripe Connect account with automatic commission */
+  STRIPE_CONNECT = "stripe_connect",
+  /** Payments processed through Bumpy.fm's Stripe account with manual vendor payouts */
+  PLATFORM = "platform",
+}
+
 export type SellerDTO = {
   id: string;
   store_status: StoreStatus;
+  /** Payment mode for processing seller payments */
+  payment_mode: SellerPaymentMode;
   created_at: Date;
   updated_at: Date;
   name: string;
