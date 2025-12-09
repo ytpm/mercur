@@ -39,7 +39,24 @@ import {
   ErrorCodes,
   ErrorIntentStatus,
   PaymentIntentOptions,
+  CommissionRuleDTO,
 } from "@mercurjs/framework";
+
+/**
+ * Payment modes for seller payment routing.
+ * - STRIPE_CONNECT: Payments go to vendor's Stripe Connect account with automatic commission
+ * - PLATFORM: Payments go to platform, vendor payouts handled manually
+ */
+const PAYMENT_MODES = {
+  STRIPE_CONNECT: "stripe_connect",
+  PLATFORM: "platform",
+} as const;
+
+/** Default commission rate (10%) if no rule is found */
+const DEFAULT_COMMISSION_RATE = 0.1;
+
+/** Commission module identifier for container resolution */
+const COMMISSION_MODULE = "commission";
 
 type Options = {
   apiKey: string;
@@ -49,10 +66,13 @@ type Options = {
 abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
   private readonly options_: Options;
   private readonly client_: Stripe;
+  /** Container reference for accessing MedusaJS services like commission module */
+  protected readonly container_: any;
 
   constructor(container, options: Options) {
     super(container);
 
+    this.container_ = container;
     this.options_ = options;
 
     this.client_ = new Stripe(options.apiKey);
@@ -88,20 +108,116 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
     }
   }
 
+  /**
+   * Initiates a payment intent with support for both Stripe Connect and Platform payment modes.
+   *
+   * For Stripe Connect mode:
+   * - Adds transfer_data.destination pointing to vendor's connected account
+   * - Adds application_fee_amount for automatic commission deduction
+   *
+   * For Platform mode:
+   * - No transfer_data, full amount goes to platform account
+   * - Commission tracked via MercurJS commission_lines
+   *
+   * Both modes add metadata for tracking: seller_id, event_id, event_number, payment_mode, commission_rate
+   *
+   * @param input - Payment initiation input with amount, currency, and context
+   * @returns Payment session data including client_secret for frontend
+   */
   async initiatePayment(
     input: InitiatePaymentInput
   ): Promise<InitiatePaymentOutput> {
-    const { amount, currency_code } = input;
+    const { amount, currency_code, context } = input;
 
-    const email = input.context?.customer?.email;
+    const email = context?.customer?.email;
 
+    // Extract seller and event info from context (passed from storefront)
+    const sellerId = context?.seller_id as string | undefined;
+    const eventId = context?.event_id as string | undefined;
+    const eventNumber = context?.event_number as string | undefined;
+    const paymentMode = (context?.payment_mode as string) || PAYMENT_MODES.PLATFORM;
+    const stripeAccountId = context?.stripe_account_id as string | undefined;
+
+    console.log(
+      `[StripeConnect] Initiating payment: seller=${sellerId}, event=${eventId}, mode=${paymentMode}`
+    );
+
+    // Calculate commission rate from MercurJS commission_rules
+    let commissionRate = DEFAULT_COMMISSION_RATE;
+
+    if (sellerId) {
+      try {
+        // Lookup commission rule using MercurJS commission service
+        const commissionService = this.container_?.resolve?.(COMMISSION_MODULE);
+
+        if (commissionService?.selectCommissionForProductLine) {
+          const commissionRule: CommissionRuleDTO | null =
+            await commissionService.selectCommissionForProductLine({
+              seller_id: sellerId,
+              product_type_id: "", // Optional: could be passed for event-specific rates
+              product_category_id: "", // Optional: could be passed for category rates
+            });
+
+          // Extract rate (percentage_rate is 0-100, convert to decimal)
+          if (commissionRule?.rate?.type === "percentage" && commissionRule.rate.percentage_rate != null) {
+            commissionRate = commissionRule.rate.percentage_rate / 100;
+            console.log(
+              `[StripeConnect] Found commission rule: ${commissionRule.name}, rate=${commissionRate * 100}%`
+            );
+          } else {
+            console.log(
+              `[StripeConnect] No commission rule found, using default ${DEFAULT_COMMISSION_RATE * 100}%`
+            );
+          }
+        } else {
+          console.log("[StripeConnect] Commission service not available, using default rate");
+        }
+      } catch (error) {
+        console.error("[StripeConnect] Error fetching commission rule:", error);
+        // Continue with default rate
+      }
+    }
+
+    const amountSmallest = getSmallestUnit(amount, currency_code);
+    const commissionAmount = Math.round(amountSmallest * commissionRate);
+
+    // Build payment intent params
     const paymentIntentInput: Stripe.PaymentIntentCreateParams = {
       ...this.paymentIntentOptions,
       currency: currency_code,
-      amount: getSmallestUnit(amount, currency_code),
+      amount: amountSmallest,
+      metadata: {
+        // Standard tracking metadata for all payments
+        seller_id: sellerId || "",
+        event_id: eventId || "",
+        event_number: eventNumber || "",
+        payment_mode: paymentMode,
+        platform: "bumpy.fm",
+        // Store commission rate for updatePayment recalculation
+        commission_rate: String(commissionRate),
+      },
     };
 
-    // revisit when you could update customer using initiatePayment
+    // Add Connect-specific params for Stripe Connect mode
+    if (paymentMode === PAYMENT_MODES.STRIPE_CONNECT && stripeAccountId) {
+      paymentIntentInput.transfer_data = {
+        destination: stripeAccountId,
+      };
+      // Commission taken automatically at payment time via application_fee_amount
+      paymentIntentInput.application_fee_amount = commissionAmount;
+
+      console.log(
+        `[StripeConnect] Connect mode: destination=${stripeAccountId}, fee=${commissionAmount} (${commissionRate * 100}%)`
+      );
+    } else {
+      // Platform mode: No transfer_data, full amount goes to platform account
+      // Commission tracked via MercurJS commission_lines (created on order.placed)
+      console.log(
+        `[StripeConnect] Platform mode: amount=${amountSmallest}, commission will be tracked separately`
+      );
+    }
+
+    // Get or create Stripe customer
     try {
       const {
         data: [customer],
@@ -132,10 +248,13 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
       }
     }
 
+    // Create the payment intent
     try {
       const data = (await this.client_.paymentIntents.create(
         paymentIntentInput
       )) as any;
+
+      console.log(`[StripeConnect] Created PaymentIntent: ${data.id}`);
 
       return {
         id: data.id,
@@ -232,6 +351,16 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
     }
   }
 
+  /**
+   * Updates an existing payment intent when the cart total changes.
+   *
+   * For Stripe Connect mode:
+   * - Recalculates application_fee_amount based on stored commission_rate in metadata
+   * - Note: transfer_data.destination cannot be changed after creation
+   *
+   * @param input - Update input with new amount and existing payment data
+   * @returns Updated payment session data
+   */
   async updatePayment(input: UpdatePaymentInput): Promise<UpdatePaymentOutput> {
     const { data, amount, currency_code } = input;
 
@@ -243,9 +372,31 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
 
     try {
       const id = data?.id as string;
-      const sessionData = (await this.client_.paymentIntents.update(id, {
+
+      // Build update params
+      const updateParams: Stripe.PaymentIntentUpdateParams = {
         amount: amountNumeric,
-      })) as any;
+      };
+
+      // Recalculate application_fee_amount if this is a Connect payment
+      // Uses commission_rate stored in metadata during initiatePayment
+      const paymentMode = data?.metadata?.payment_mode;
+      const commissionRateStr = data?.metadata?.commission_rate;
+      const commissionRate = commissionRateStr ? parseFloat(commissionRateStr) : 0;
+
+      if (paymentMode === PAYMENT_MODES.STRIPE_CONNECT && commissionRate > 0) {
+        // Recalculate fee based on new amount
+        const newFee = Math.round(amountNumeric * commissionRate);
+        updateParams.application_fee_amount = newFee;
+
+        console.log(
+          `[StripeConnect] Updating payment ${id}: amount=${amountNumeric}, fee=${newFee} (${commissionRate * 100}%)`
+        );
+      } else {
+        console.log(`[StripeConnect] Updating payment ${id}: amount=${amountNumeric}`);
+      }
+
+      const sessionData = (await this.client_.paymentIntents.update(id, updateParams)) as any;
 
       return { data: sessionData };
     } catch (e) {
