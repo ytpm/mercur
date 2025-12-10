@@ -67,14 +67,37 @@ export const validateCartShippingOptionsStep = createStep(
     const sellers = new Set(sellerProducts.map((sp: any) => sp.seller_id))
     logger.info(`[validateCartShippingOptions] Unique sellers from products: ${JSON.stringify(Array.from(sellers))}`)
 
-    for (const sellerShippingOption of sellerShippingOptions) {
-      logger.info(`[validateCartShippingOptions] Checking shipping option: seller_id=${sellerShippingOption.seller_id}, shipping_option_id=${sellerShippingOption.shipping_option_id}`)
-      logger.info(`[validateCartShippingOptions] Is seller in sellers set? ${sellers.has(sellerShippingOption.seller_id)}`)
-      if (!sellers.has(sellerShippingOption.seller_id)) {
-        logger.error(`[validateCartShippingOptions] VALIDATION FAILED: Shipping option ${sellerShippingOption.shipping_option_id} seller ${sellerShippingOption.seller_id} not in sellers set ${JSON.stringify(Array.from(sellers))}`)
+    /**
+     * Group shipping options by their ID to check if AT LEAST ONE seller
+     * for each shipping option is in the cart's sellers set.
+     * This fixes the issue where a shared shipping option (linked to multiple sellers)
+     * would fail validation because the first seller checked didn't match.
+     */
+    const shippingOptionSellers = new Map<string, Set<string>>()
+    for (const sso of sellerShippingOptions) {
+      if (!shippingOptionSellers.has(sso.shipping_option_id)) {
+        shippingOptionSellers.set(sso.shipping_option_id, new Set())
+      }
+      shippingOptionSellers.get(sso.shipping_option_id)!.add(sso.seller_id)
+    }
+
+    logger.info(`[validateCartShippingOptions] Shipping option sellers map: ${JSON.stringify(
+      Array.from(shippingOptionSellers.entries()).map(([optionId, sellerSet]) => ({
+        shipping_option_id: optionId,
+        sellers: Array.from(sellerSet)
+      }))
+    )}`)
+
+    // For each shipping option, check if AT LEAST ONE of its sellers is in the cart's sellers set
+    for (const [shippingOptionId, optionSellers] of shippingOptionSellers) {
+      const hasMatchingSeller = Array.from(optionSellers).some(sellerId => sellers.has(sellerId))
+      logger.info(`[validateCartShippingOptions] Checking shipping option ${shippingOptionId}: sellers=${JSON.stringify(Array.from(optionSellers))}, hasMatchingSeller=${hasMatchingSeller}`)
+
+      if (!hasMatchingSeller) {
+        logger.error(`[validateCartShippingOptions] VALIDATION FAILED: Shipping option ${shippingOptionId} has no matching seller in cart sellers set ${JSON.stringify(Array.from(sellers))}`)
         throw new MedusaError(
           MedusaError.Types.INVALID_DATA,
-          `Shipping option with id: ${sellerShippingOption.shipping_option_id} is not available for any of the cart items`
+          `Shipping option with id: ${shippingOptionId} is not available for any of the cart items`
         )
       }
     }
