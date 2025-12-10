@@ -1,10 +1,13 @@
 {
-  "name": "@mercurjs/payment-stripe-connect",
-  "version": "1.4.3",
+  "name": "@ytpm/mercurjs-payment-stripe-connect",
+  "version": "1.4.4",
   "author": "MercurJS <hello@mercurjs.com> (https://mercurjs.com)",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mercurjs/mercur"
+    "url": "https://github.com/ytpm/bumpy.fm"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
   },
   "license": "MIT",
   "keywords": [
