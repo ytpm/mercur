@@ -1,6 +1,6 @@
 {
   "name": "@ytpm/mercurjs-b2c-core",
-  "version": "1.4.4",
+  "version": "1.4.5",
   "author": "MercurJS <hello@mercurjs.com> (https://mercurjs.com)",
   "repository": {
     "type": "git",
@@ -37,6 +37,9 @@
     "build": "medusa plugin:build",
     "dev": "medusa plugin:develop",
     "prepublishOnly": "medusa plugin:build"
+  },
+  "dependencies": {
+    "@mercurjs/framework": "npm:@ytpm/mercurjs-framework@*"
   },
   "devDependencies": {
     "@medusajs/admin-sdk": "2.10.2",
