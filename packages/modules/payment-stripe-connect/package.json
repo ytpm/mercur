@@ -1,6 +1,6 @@
 {
   "name": "@ytpm/mercurjs-payment-stripe-connect",
-  "version": "1.4.7",
+  "version": "1.4.8",
   "author": "MercurJS <hello@mercurjs.com> (https://mercurjs.com)",
   "repository": {
     "type": "git",
