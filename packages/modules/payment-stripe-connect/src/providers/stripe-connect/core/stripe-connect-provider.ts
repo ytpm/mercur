@@ -198,11 +198,19 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
     console.log(`[StripeConnect] Amount conversion: input=${amount}, amountSmallest=${amountSmallest}`);
 
     // Build payment intent params
+    // CRITICAL: session_id MUST be included in metadata for webhook handler to work correctly
+    // The getWebhookActionAndData method reads intent.metadata.session_id to return to processPaymentWorkflow
+    // Without this, the workflow queries with undefined session_id and returns wrong/random results
+    const sessionId = data?.session_id as string | undefined;
+    console.log(`[StripeConnect] Session ID from input data: ${sessionId}`);
+
     const paymentIntentInput: Stripe.PaymentIntentCreateParams = {
       ...this.paymentIntentOptions,
       currency: currency_code,
       amount: amountSmallest,
       metadata: {
+        // CRITICAL: session_id required for webhook handler - see getWebhookActionAndData
+        session_id: sessionId || "",
         // Standard tracking metadata for all payments
         seller_id: sellerId || "",
         event_id: eventId || "",
