@@ -471,14 +471,13 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
           },
         };
       case "payment_intent.succeeded":
-        return {
-          action: PaymentActions.SUCCESSFUL,
-          data: {
-            session_id: intent.metadata.session_id,
-            // Stripe amounts are in smallest units (same as MedusaJS) - no conversion needed
-            amount: intent.amount_received,
-          },
-        };
+        // IMPORTANT: Return NOT_SUPPORTED to prevent duplicate payment processing
+        // The cart completion flow (completeCart -> authorizePaymentSession) already handles
+        // payment capture. If we return SUCCESSFUL here, processPaymentWorkflow runs AGAIN
+        // and creates a second PaymentIntent, causing the "cannot cancel succeeded" error.
+        // See: docs/duplicate-payment-intent-investigation.md
+        console.log(`[StripeConnect] payment_intent.succeeded received for ${intent.id} - returning NOT_SUPPORTED to prevent duplicate processing`);
+        return { action: PaymentActions.NOT_SUPPORTED };
       case "payment_intent.payment_failed":
         return {
           action: PaymentActions.FAILED,
