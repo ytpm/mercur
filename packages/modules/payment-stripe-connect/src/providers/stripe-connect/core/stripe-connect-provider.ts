@@ -34,6 +34,8 @@ import {
 } from "@medusajs/types";
 
 import {
+  getAmountFromSmallestUnit,
+  getSmallestUnit,
   ErrorCodes,
   ErrorIntentStatus,
   PaymentIntentOptions,
@@ -189,10 +191,9 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
       }
     }
 
-    // MedusaJS passes amounts already in smallest units (e.g., satang for THB, cents for USD)
-    // Do NOT use getSmallestUnit here as it would multiply by 100 again, causing double conversion
-    // See: https://docs.medusajs.com - payment provider amounts are in smallest currency unit
-    const amountSmallest = typeof amount === 'number' ? amount : Number(amount);
+    // Convert from major units (e.g., THB, USD) to minor units (satang, cents)
+    // MedusaJS stores prices in minor units, Stripe expects minor units
+    const amountSmallest = getSmallestUnit(amount, currency_code);
     const commissionAmount = Math.round(amountSmallest * commissionRate);
 
     console.log(`[StripeConnect] Amount conversion: input=${amount}, amountSmallest=${amountSmallest}`);
@@ -348,9 +349,9 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
     const id = paymentSessionData?.id as string;
 
     try {
-      // MedusaJS passes amounts already in smallest units
-      // Do NOT use getSmallestUnit here as it would multiply by 100 again
-      const amountNumeric = typeof amount === 'number' ? amount : Number(amount);
+      // Convert refund amount from major units to minor units
+      const currency = paymentSessionData?.currency as string;
+      const amountNumeric = getSmallestUnit(amount, currency);
       await this.client_.refunds.create({
         amount: amountNumeric,
         payment_intent: id as string,
@@ -369,8 +370,8 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
       const id = paymentSessionData?.id as string;
       const intent = (await this.client_.paymentIntents.retrieve(id)) as any;
 
-      // Stripe stores amounts in smallest units (same as MedusaJS)
-      // Do NOT convert back - keep as smallest units for consistency
+      // Convert from Stripe's minor units back to major units for MedusaJS display
+      intent.amount = getAmountFromSmallestUnit(intent.amount, intent.currency);
       console.log("[StripeConnect] Retrieving payment intent:", intent.id, "amount:", intent.amount);
       return { data: intent };
     } catch (e) {
@@ -391,9 +392,8 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
   async updatePayment(input: UpdatePaymentInput): Promise<UpdatePaymentOutput> {
     const { data, amount, currency_code } = input;
 
-    // MedusaJS passes amounts already in smallest units (e.g., satang for THB, cents for USD)
-    // Do NOT use getSmallestUnit here as it would multiply by 100 again
-    const amountNumeric = typeof amount === 'number' ? amount : Number(amount);
+    // Convert from major units to minor units for Stripe
+    const amountNumeric = getSmallestUnit(amount, currency_code);
 
     if (isPresent(amount) && data?.amount === amountNumeric) {
       return { data };
@@ -457,6 +457,7 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
   ): Promise<WebhookActionResult> {
     const event = this.constructWebhookEvent(webhookData);
     const intent = event.data.object as Stripe.PaymentIntent;
+    const currency = intent.currency;
 
     console.log(`[StripeConnect] Webhook event: ${event.type}, intent: ${intent.id}`);
 
@@ -466,8 +467,8 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
           action: PaymentActions.AUTHORIZED,
           data: {
             session_id: intent.metadata.session_id,
-            // Stripe amounts are in smallest units (same as MedusaJS) - no conversion needed
-            amount: intent.amount_capturable,
+            // Convert from Stripe's minor units back to major units
+            amount: getAmountFromSmallestUnit(intent.amount_capturable, currency),
           },
         };
       case "payment_intent.succeeded":
@@ -483,8 +484,8 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
           action: PaymentActions.FAILED,
           data: {
             session_id: intent.metadata.session_id,
-            // Stripe amounts are in smallest units (same as MedusaJS) - no conversion needed
-            amount: intent.amount,
+            // Convert from Stripe's minor units back to major units
+            amount: getAmountFromSmallestUnit(intent.amount, currency),
           },
         };
       default:
