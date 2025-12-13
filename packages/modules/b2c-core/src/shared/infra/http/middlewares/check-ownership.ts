@@ -7,6 +7,7 @@ import {
 import {
   ContainerRegistrationKeys,
   MedusaError,
+  Modules,
 } from "@medusajs/framework/utils";
 
 /**
@@ -62,10 +63,24 @@ export const checkResourceOwnershipByResourceId = <Body>({
     next: NextFunction
   ) => {
     const query = req.scope.resolve(ContainerRegistrationKeys.QUERY);
-    const appMetadata = req.auth_context?.app_metadata;
+    const authIdentityId = req.auth_context?.auth_identity_id;
+    let appMetadata = req.auth_context?.app_metadata || {};
 
-    // Get active seller from app_metadata
-    const activeSellerId = appMetadata?.active_seller_id;
+    // Get active seller from app_metadata (may be missing in JWT)
+    let activeSellerId = appMetadata?.active_seller_id;
+
+    // If no active_seller_id in JWT app_metadata, fetch fresh from database
+    // JWT tokens only contain partial app_metadata (seller_id), not the full
+    // multi-vendor data (active_seller_id, seller_memberships[])
+    if (!activeSellerId && authIdentityId) {
+      console.log(
+        `[checkResourceOwnershipByResourceId] No active_seller_id in JWT, fetching from DB for auth_identity: ${authIdentityId}`
+      );
+      const authService = req.scope.resolve(Modules.AUTH);
+      const authIdentity = await authService.retrieveAuthIdentity(authIdentityId);
+      appMetadata = authIdentity?.app_metadata || {};
+      activeSellerId = appMetadata?.active_seller_id;
+    }
 
     console.log(
       `[checkResourceOwnershipByResourceId] Checking ownership for active_seller_id: ${activeSellerId}`
