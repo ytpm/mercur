@@ -103,10 +103,38 @@ export const splitAndCompleteCartWorkflow = createWorkflow(
 
       const paymentSessions = validateCartPaymentsStep({ cart });
 
-      const payment = authorizePaymentSessionStep({
-        id: paymentSessions[0].id,
-        context: { cart_id: cart.id },
-      });
+      // Prepare payment session ID - will be empty string for free orders (empty paymentSessions array)
+      // authorizePaymentSessionStep returns null when id is falsy (!input.id)
+      const paymentSessionInput = transform(
+        { paymentSessions, cart },
+        ({ paymentSessions, cart }) => {
+          const hasPaidPayment = paymentSessions && paymentSessions.length > 0;
+          if (!hasPaidPayment) {
+            console.log("[splitAndCompleteCart] FREE ORDER detected (cart.total <= 0) - will skip payment authorization");
+            // Return empty string - authorizePaymentSessionStep checks !input.id and returns null
+            return { id: "" as string, context: { cart_id: cart.id } };
+          }
+          console.log("[splitAndCompleteCart] PAID ORDER - will authorize payment session:", paymentSessions[0].id);
+          return { id: paymentSessions[0].id as string, context: { cart_id: cart.id } };
+        }
+      );
+
+      // Authorize payment session - returns null for free orders (when id is empty/falsy)
+      const payment = authorizePaymentSessionStep(paymentSessionInput);
+
+      // Resolve payment_collection_id: use payment result for paid orders, cart.payment_collection.id for free orders
+      const resolvedPaymentCollectionId = transform(
+        { payment, cart },
+        ({ payment, cart }) => {
+          // If payment is null/undefined (free order), use cart.payment_collection.id
+          if (!payment || !payment.payment_collection_id) {
+            console.log("[splitAndCompleteCart] Using cart.payment_collection.id for free order:", cart.payment_collection?.id);
+            return cart.payment_collection?.id;
+          }
+          console.log("[splitAndCompleteCart] Using payment.payment_collection_id for paid order:", payment.payment_collection_id);
+          return payment.payment_collection_id;
+        }
+      );
 
       const { ordersToCreate, sellers, variants } = transform(
         { cart, sellerProducts, sellerShippingOptions },
@@ -249,14 +277,14 @@ export const splitAndCompleteCartWorkflow = createWorkflow(
         cart_id: cart.id,
         customer_id: cart.customer_id,
         sales_channel_id: cart.sales_channel_id,
-        payment_collection_id: payment.payment_collection_id,
+        payment_collection_id: resolvedPaymentCollectionId,
       });
 
       const createdOrders = createOrdersStep(ordersToCreate);
 
       const splitPaymentsToCreate = transform(
-        { createdOrders, payment },
-        ({ createdOrders, payment }) => {
+        { createdOrders, resolvedPaymentCollectionId },
+        ({ createdOrders, resolvedPaymentCollectionId }) => {
           return createdOrders.map((order) => ({
             order_id: order.id,
             status: "pending",
@@ -265,7 +293,7 @@ export const splitAndCompleteCartWorkflow = createWorkflow(
               // @ts-ignore
               order.summary?.accounting_total || 0
             ).toNumber(),
-            payment_collection_id: payment!.payment_collection_id,
+            payment_collection_id: resolvedPaymentCollectionId,
           }));
         }
       );
