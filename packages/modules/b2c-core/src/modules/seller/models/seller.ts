@@ -28,6 +28,14 @@ export const Seller = model.define("seller", {
   postal_code: model.text().nullable(),
   country_code: model.text().nullable(),
   tax_id: model.text().nullable(),
+  /** Contact person first name */
+  contact_first_name: model.text().nullable(),
+  /** Contact person last name */
+  contact_last_name: model.text().nullable(),
+  /** Contact person email */
+  contact_email: model.text().nullable(),
+  /** Contact person phone number */
+  contact_phone: model.text().nullable(),
   members: model.hasMany(() => Member),
   invites: model.hasMany(() => MemberInvite),
   onboarding: model.hasOne(() => SellerOnboarding).nullable(),
