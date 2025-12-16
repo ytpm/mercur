@@ -58,6 +58,22 @@ export const VendorGetSellerParams = createSelectParams();
  *     type: string
  *     nullable: true
  *     description: Seller tax id.
+ *   contact_first_name:
+ *     type: string
+ *     nullable: true
+ *     description: Contact person first name.
+ *   contact_last_name:
+ *     type: string
+ *     nullable: true
+ *     description: Contact person last name.
+ *   contact_email:
+ *     type: string
+ *     nullable: true
+ *     description: Contact person email.
+ *   contact_phone:
+ *     type: string
+ *     nullable: true
+ *     description: Contact person phone number.
  *   member:
  *     type: object
  *     required:
@@ -98,6 +114,10 @@ export const VendorCreateSeller = z
     postal_code: z.string().nullish().optional(),
     country_code: z.string().nullish().optional(),
     tax_id: z.string().nullish().optional(),
+    contact_first_name: z.string().nullish().optional(),
+    contact_last_name: z.string().nullish().optional(),
+    contact_email: z.string().email().nullish().optional(),
+    contact_phone: z.string().nullish().optional(),
     member: z.object({
       name: z.string(),
       email: z.string().email(),
@@ -157,6 +177,22 @@ export const VendorCreateSeller = z
  *     type: string
  *     nullable: true
  *     description: Seller tax id.
+ *   contact_first_name:
+ *     type: string
+ *     nullable: true
+ *     description: Contact person first name.
+ *   contact_last_name:
+ *     type: string
+ *     nullable: true
+ *     description: Contact person last name.
+ *   contact_email:
+ *     type: string
+ *     nullable: true
+ *     description: Contact person email.
+ *   contact_phone:
+ *     type: string
+ *     nullable: true
+ *     description: Contact person phone number.
  */
 export type VendorUpdateSellerType = z.infer<typeof VendorUpdateSeller>;
 export const VendorUpdateSeller = z
@@ -174,6 +210,10 @@ export const VendorUpdateSeller = z
     postal_code: z.string().optional(),
     country_code: z.string().optional(),
     tax_id: z.string().optional(),
+    contact_first_name: z.string().optional(),
+    contact_last_name: z.string().optional(),
+    contact_email: z.string().email().optional().or(z.literal("")),
+    contact_phone: z.string().optional(),
   })
   .strict();
 
