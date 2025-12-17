@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 import { createFindParams } from '@medusajs/medusa/api/utils/validators'
 
-import { StoreStatus } from '@mercurjs/framework'
+import { StoreStatus, SellerPaymentMode } from '@mercurjs/framework'
 
 export type AdminSellerParamsType = z.infer<typeof AdminSellerParams>
 export const AdminSellerParams = createFindParams({
@@ -35,6 +35,10 @@ export const AdminGetSellerCustomerGroupsParams = createFindParams({
 })
 
 export type AdminUpdateSellerType = z.infer<typeof AdminUpdateSeller>
+/**
+ * Validator for admin seller update requests.
+ * Uses .passthrough() to allow extended fields from custom implementations.
+ */
 export const AdminUpdateSeller = z
   .object({
     name: z
@@ -50,9 +54,16 @@ export const AdminUpdateSeller = z
     postal_code: z.string().optional(),
     country_code: z.string().optional(),
     tax_id: z.string().optional(),
-    store_status: z.nativeEnum(StoreStatus).optional()
+    store_status: z.nativeEnum(StoreStatus).optional(),
+    // Extended contact person fields
+    contact_first_name: z.string().optional(),
+    contact_last_name: z.string().optional(),
+    contact_email: z.string().email().optional(),
+    contact_phone: z.string().optional(),
+    // Payment mode for seller payout configuration
+    payment_mode: z.nativeEnum(SellerPaymentMode).optional()
   })
-  .strict()
+  .passthrough()
 
 export type AdminInviteSellerType = z.infer<typeof AdminInviteSeller>
 export const AdminInviteSeller = z.object({
