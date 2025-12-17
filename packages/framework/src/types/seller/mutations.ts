@@ -55,7 +55,8 @@ export interface CreateMemberInviteDTO
 
 export interface AcceptMemberInviteDTO {
   token: string
-  name: string
+  /** Optional member name. If not provided, email will be used as fallback */
+  name?: string
 }
 
 export interface UpdateMemberInviteDTO extends Partial<MemberInviteDTO> {

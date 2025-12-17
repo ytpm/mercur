@@ -79,9 +79,9 @@ export const fetchSellerByAuthContext = async (
 
   const query = scope.resolve(ContainerRegistrationKeys.QUERY);
 
-  const {
-    data: [seller],
-  } = await query.graph({
+  console.log(`[framework:fetchSellerByAuthContext] Querying seller with id: ${activeSellerId}`);
+
+  const result = await query.graph({
     entity: "seller",
     filters: {
       id: activeSellerId,
@@ -89,7 +89,16 @@ export const fetchSellerByAuthContext = async (
     fields,
   });
 
-  console.log(`[framework:fetchSellerByAuthContext] Found seller: ${seller?.id}`);
+  console.log(`[framework:fetchSellerByAuthContext] Query result:`, JSON.stringify(result));
+
+  const seller = result.data?.[0];
+
+  if (!seller) {
+    console.error(`[framework:fetchSellerByAuthContext] Seller ${activeSellerId} not found in database`);
+    return undefined;
+  }
+
+  console.log(`[framework:fetchSellerByAuthContext] Found seller: ${seller.id}`);
   return seller;
 };
 
