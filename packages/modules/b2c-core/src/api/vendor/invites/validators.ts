@@ -41,7 +41,6 @@ export const VendorInviteMember = z
  * @schema VendorAcceptMemberInvite
  * type: object
  * required:
- *   - name
  *   - token
  * properties:
  *   token:
@@ -49,7 +48,7 @@ export const VendorInviteMember = z
  *     description: The invitation token to accept.
  *   name:
  *     type: string
- *     description: The name of the member accepting the invite.
+ *     description: The name of the member accepting the invite. If not provided, uses email from invite.
  */
 export type VendorAcceptMemberInviteType = z.infer<
   typeof VendorAcceptMemberInvite
@@ -57,6 +56,6 @@ export type VendorAcceptMemberInviteType = z.infer<
 export const VendorAcceptMemberInvite = z
   .object({
     token: z.string(),
-    name: z.string()
+    name: z.string().optional()
   })
   .strict()

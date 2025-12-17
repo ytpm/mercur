@@ -39,10 +39,11 @@ export const acceptMemberInvitesWorkflow = createWorkflow(
     const invite = validateMemberInviteStep(input.invite);
 
     // Step 2: Create member and mark invite as accepted (parallel for performance)
+    // Use provided name or fallback to email from invite
     const [member] = parallelize(
       createMemberStep({
         seller_id: invite.seller.id,
-        name: input.invite.name,
+        name: input.invite.name || invite.email,
         role: invite.role,
         email: invite.email,
       }),

@@ -52,6 +52,7 @@ export const POST = async (
 ) => {
   const query = req.scope.resolve(ContainerRegistrationKeys.QUERY);
   const appMetadata = req.auth_context?.app_metadata;
+  const authIdentityId = req.auth_context?.auth_identity_id;
 
   console.log(
     `[POST /vendor/invites] Creating invite for active_seller_id: ${appMetadata?.active_seller_id}`
@@ -60,7 +61,7 @@ export const POST = async (
   const seller = await fetchSellerByAuthContext(appMetadata, req.scope, [
     "id",
     "name",
-  ]);
+  ], authIdentityId);
 
   const { result: created } = await inviteMemberWorkflow(req.scope).run({
     input: {

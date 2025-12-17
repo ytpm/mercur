@@ -68,6 +68,11 @@ export const fetchSellerByAuthContext = async (
 
   const query = scope.resolve(ContainerRegistrationKeys.QUERY);
 
+  // Ensure 'id' is always included in fields for proper seller identification
+  const queryFields = fields.includes("id") ? fields : ["id", ...fields];
+
+  console.log(`[fetchSellerByAuthContext] Querying seller with id: ${activeSellerId}, fields: ${JSON.stringify(queryFields)}`);
+
   const {
     data: [seller],
   } = await query.graph({
@@ -75,11 +80,13 @@ export const fetchSellerByAuthContext = async (
     filters: {
       id: activeSellerId, // Direct lookup by seller ID
     },
-    fields,
+    fields: queryFields,
   });
 
+  console.log(`[fetchSellerByAuthContext] Query result seller:`, JSON.stringify(seller));
+
   if (!seller) {
-    console.error(`[fetchSellerByAuthContext] Seller ${activeSellerId} not found`);
+    console.error(`[fetchSellerByAuthContext] Seller ${activeSellerId} not found in database`);
     throw new MedusaError(
       MedusaError.Types.NOT_FOUND,
       `Seller ${activeSellerId} not found`
