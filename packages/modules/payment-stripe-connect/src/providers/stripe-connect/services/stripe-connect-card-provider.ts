@@ -10,7 +10,9 @@ class StripeConnectCardProviderService extends StripeConnectProvider {
 
   get paymentIntentOptions(): PaymentIntentOptions {
     return {
-      payment_method_types: ["card"],
+      // Use automatic_payment_methods for compatibility with Stripe Elements deferred mode
+      // The frontend uses Elements with mode: "payment" which requires automatic_payment_methods
+      automatic_payment_methods: { enabled: true },
     };
   }
 }
