@@ -151,8 +151,11 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
     const paymentMode = ((data?.payment_mode || context?.payment_mode) as string) || PAYMENT_MODES.PLATFORM;
     const stripeAccountId = (data?.stripe_account_id || context?.stripe_account_id) as string | undefined;
 
+    // Check if event requires attendee approval (pre-authorization / manual capture)
+    const requiresApproval = (data?.requires_approval || context?.requires_approval) as boolean;
+
     console.log(
-      `[StripeConnect] Initiating payment: seller=${sellerId}, event=${eventId}, mode=${paymentMode}`
+      `[StripeConnect] Initiating payment: seller=${sellerId}, event=${eventId}, mode=${paymentMode}, requiresApproval=${requiresApproval}`
     );
 
     // Calculate commission rate from MercurJS commission_rules
@@ -209,6 +212,9 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
       ...this.paymentIntentOptions,
       currency: currency_code,
       amount: amountSmallest,
+      // Use manual capture for approval-required events (pre-authorization)
+      // This places a hold on the card without charging until explicitly captured
+      capture_method: requiresApproval ? 'manual' : 'automatic',
       metadata: {
         // CRITICAL: session_id required for webhook handler - see getWebhookActionAndData
         session_id: sessionId || "",
@@ -220,6 +226,8 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
         platform: "bumpy.fm",
         // Store commission rate for updatePayment recalculation
         commission_rate: String(commissionRate),
+        // Track if approval is required for webhook handling and downstream processing
+        requires_approval: requiresApproval ? "true" : "false",
       },
     };
 
