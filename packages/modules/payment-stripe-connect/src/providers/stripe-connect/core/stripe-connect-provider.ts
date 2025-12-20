@@ -215,6 +215,17 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
       // Use manual capture for approval-required events (pre-authorization)
       // This places a hold on the card without charging until explicitly captured
       capture_method: requiresApproval ? 'manual' : 'automatic',
+      // IMPORTANT: When using automatic_payment_methods with Stripe Elements,
+      // payment_method_options.card.capture_method only accepts 'manual'.
+      // For automatic capture, omit this field entirely.
+      // See: https://docs.stripe.com/payments/payment-element/migration-ct
+      ...(requiresApproval && {
+        payment_method_options: {
+          card: {
+            capture_method: 'manual' as const,
+          },
+        },
+      }),
       metadata: {
         // CRITICAL: session_id required for webhook handler - see getWebhookActionAndData
         session_id: sessionId || "",
