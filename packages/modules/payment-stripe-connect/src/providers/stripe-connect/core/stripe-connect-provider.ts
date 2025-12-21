@@ -152,7 +152,8 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
     const stripeAccountId = (data?.stripe_account_id || context?.stripe_account_id) as string | undefined;
 
     // Check if event requires attendee approval (pre-authorization / manual capture)
-    const requiresApproval = (data?.requires_approval || context?.requires_approval) as boolean;
+    // Use nullish coalescing (??) instead of || to handle false values correctly
+    const requiresApproval = (data?.requires_approval ?? context?.requires_approval) as boolean;
 
     console.log(
       `[StripeConnect] Initiating payment: seller=${sellerId}, event=${eventId}, mode=${paymentMode}, requiresApproval=${requiresApproval}`
