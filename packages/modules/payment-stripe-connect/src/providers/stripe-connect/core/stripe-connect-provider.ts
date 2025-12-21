@@ -165,7 +165,8 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
     if (sellerId) {
       try {
         // Lookup commission rule using MercurJS commission service
-        const commissionService = this.container_?.resolve?.(COMMISSION_MODULE);
+        // Access via property (cradle proxy) - NOT resolve() which doesn't exist on cradle
+        const commissionService = this.container_?.[COMMISSION_MODULE];
 
         if (commissionService?.selectCommissionForProductLine) {
           const commissionRule: CommissionRuleDTO | null =
