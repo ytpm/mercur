@@ -1,6 +1,6 @@
 import { WorkflowResponse, createWorkflow } from '@medusajs/workflows-sdk'
 
-import { UpdateCommissionRuleDTO } from '@mercurjs/framework'
+import { UpdateCommissionRuleDTO } from '@ytpm/mercurjs-framework'
 
 import { updateCommissionRuleStep } from '../steps'
 

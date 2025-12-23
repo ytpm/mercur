@@ -6,7 +6,7 @@ import {
   when
 } from '@medusajs/workflows-sdk'
 
-import { CreateCommissionRuleDTO } from '@mercurjs/framework'
+import { CreateCommissionRuleDTO } from '@ytpm/mercurjs-framework'
 
 import { createCommissionRuleStep, deleteCommissionRuleStep } from '../steps'
 

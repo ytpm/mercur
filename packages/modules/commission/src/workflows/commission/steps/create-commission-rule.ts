@@ -8,7 +8,7 @@ import {
 import {
   CommissionRuleDTO,
   CreateCommissionRuleDTO,
-} from "@mercurjs/framework";
+} from "@ytpm/mercurjs-framework";
 
 export const createCommissionRuleStep = createStep(
   "create-commission-rule",

@@ -40,14 +40,31 @@ export const findCommissionRulesStep = createStep(
         take?: number
       }
       ids?: string[]
+      /** Filter by reference type */
+      reference?: string
+      /** Filter by reference ID */
+      reference_id?: string
     },
     { container }
   ) => {
     const query = container.resolve(ContainerRegistrationKeys.QUERY)
 
-    const filters = input.ids
-      ? { id: input.ids }
-      : { reference: { $ne: 'site' } }
+    // Build filters based on input
+    let filters: Record<string, any> = {}
+
+    if (input.ids) {
+      filters.id = input.ids
+    } else if (input.reference && input.reference_id) {
+      // Filter by both reference and reference_id
+      filters.reference = input.reference
+      filters.reference_id = input.reference_id
+    } else if (input.reference) {
+      // Filter by reference only
+      filters.reference = input.reference
+    } else {
+      // Default: exclude site-level rules
+      filters.reference = { $ne: 'site' }
+    }
 
     const { data: commissions, metadata } = await query.graph({
       entity: 'commission_rule',

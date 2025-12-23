@@ -32,9 +32,18 @@ export type CommissionLineDTO = {
   updated_at: Date
 }
 
+/**
+ * Context for commission calculation.
+ * Used to determine which commission rule applies to a product line item.
+ */
 export type CommissionCalculationContext = {
+  /** The product/event ID - required for event-level commission override */
+  product_id: string
+  /** The product type ID */
   product_type_id: string
+  /** The product category ID */
   product_category_id: string
+  /** The seller/vendor ID */
   seller_id: string
 }
 

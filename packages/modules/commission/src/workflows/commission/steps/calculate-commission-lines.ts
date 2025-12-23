@@ -14,7 +14,7 @@ import {
 import {
   CommissionRateDTO,
   CreateCommissionLineDTO,
-} from "@mercurjs/framework";
+} from "@ytpm/mercurjs-framework";
 
 type StepInput = {
   seller_id: string;
@@ -125,6 +125,7 @@ export const calculateCommissionLinesStep = createStep(
 
       const commissionRule =
         await commissionService.selectCommissionForProductLine({
+          product_id: item.product_id || "",
           product_category_id: product.categories[0]?.id || "",
           product_type_id: item.product_type_id || "",
           seller_id: seller_id,

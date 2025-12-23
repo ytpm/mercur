@@ -4,7 +4,7 @@ import {
   CommissionModuleService,
   COMMISSION_MODULE,
 } from "../../../modules/commission";
-import { CreateCommissionLineDTO } from "@mercurjs/framework";
+import { CreateCommissionLineDTO } from "@ytpm/mercurjs-framework";
 
 export const createCommissionLinesStep = createStep(
   "create-commission-lines",

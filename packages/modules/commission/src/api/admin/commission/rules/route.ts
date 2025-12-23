@@ -118,9 +118,19 @@ export async function GET(
   req: MedusaRequest,
   res: MedusaResponse
 ): Promise<void> {
+  // Extract reference and reference_id from query params for filtering
+  const { reference, reference_id } = req.validatedQuery as {
+    reference?: string
+    reference_id?: string
+  }
+
   const { result } = await listCommissionRulesWorkflow.run({
     container: req.scope,
-    input: { pagination: req.queryConfig.pagination }
+    input: {
+      pagination: req.queryConfig.pagination,
+      reference,
+      reference_id
+    }
   })
 
   res.json({

@@ -60,32 +60,51 @@ export const AdminCreateCommissionRate = z.object({
   min_price_set: z.array(Price).optional()
 })
 
-export type AdminCommissionRuleParamsType = z.infer<
-  typeof AdminCommissionRuleParams
->
-export const AdminCommissionRuleParams = createFindParams({
-  offset: 0,
-  limit: 50
-})
-
 /**
  * Reference type for commission rule
- * We have simple (one reference_id at once), and combined types: 'seller+product_category', 'seller+product_type'
+ * We have simple (one reference_id at once), and combined types: 'seller+product_category', 'seller+product_type', 'seller+product'
  * For combined types let's assume that reference_id is also combined in format: 'ref_id1+ref_id2'
  * For example:
  * {
  *  reference: 'seller+product_category'
  *  reference_id: 'sel_01JER8T3FWMY7T8ETYDNNYVE39+pcat_01JENRK39TBX7H88YB5JN63RP2'
  * }
+ *
+ * Priority order (highest to lowest):
+ * 1. seller+product - event-level commission override for a specific vendor
+ * 2. product - event-level commission (global)
+ * 3. seller+product_type
+ * 4. seller+product_category
+ * 5. seller - vendor default commission
+ * 6. product_type
+ * 7. product_category
+ * 8. site - global default
  */
 export const CommissionRuleReferenceType = z.enum([
+  'product',               // Event-level commission (global)
   'product_type',
   'product_category',
   'seller_group',
+  'seller+product',        // Event-level commission override for a vendor
   'seller+product_category',
   'seller+product_type',
   'seller'
 ])
+
+export type AdminCommissionRuleParamsType = z.infer<
+  typeof AdminCommissionRuleParams
+>
+export const AdminCommissionRuleParams = createFindParams({
+  offset: 0,
+  limit: 50
+}).merge(
+  z.object({
+    /** Filter by reference type */
+    reference: CommissionRuleReferenceType.optional(),
+    /** Filter by reference ID */
+    reference_id: z.string().optional()
+  })
+)
 
 /**
  * @schema AdminCreateCommissionRule
@@ -188,12 +207,42 @@ export const validateCommissionRate = (rate: AdminCreateCommissionRateType) => {
   }
 }
 
+/**
+ * Helper function to check if a string starts with any of the given prefixes.
+ * @param str The string to check
+ * @param prefixes Array of valid prefixes
+ * @returns true if the string starts with any of the prefixes
+ */
+const startsWithAny = (str: string, prefixes: string[]): boolean => {
+  return prefixes.some(prefix => str.startsWith(prefix))
+}
+
+/**
+ * Validates that the reference_id matches the expected format for the given reference type.
+ * Supports both standard Medusa product IDs (prod_) and custom event IDs (evt_).
+ * @param obj The commission rule to validate
+ * @throws MedusaError if the reference_id is invalid
+ */
 export const validateCommissionRule = (obj: AdminCreateCommissionRuleType) => {
+  console.log('[validateCommissionRule] Validating rule:', {
+    reference: obj.reference,
+    reference_id: obj.reference_id,
+  })
+
+  // Valid prefixes for product/event references (supports both standard products and custom events)
+  const productPrefixes = ['prod', 'evt']
+
   const errors = [
     obj.reference === 'seller' && !obj.reference_id.startsWith('sel'),
+    // Product validation (event-level commission) - accepts both prod_ and evt_ prefixes
+    obj.reference === 'product' && !startsWithAny(obj.reference_id, productPrefixes),
     obj.reference === 'product_category' &&
       !obj.reference_id.startsWith('pcat'),
     obj.reference === 'product_type' && !obj.reference_id.startsWith('ptyp'),
+    // Seller + Product validation (event-level commission override for vendor)
+    obj.reference === 'seller+product' &&
+      (!obj.reference_id.split('+')[0].startsWith('sel') ||
+        !startsWithAny(obj.reference_id.split('+')[1], productPrefixes)),
     obj.reference === 'seller+product_type' &&
       (!obj.reference_id.split('+')[0].startsWith('sel') ||
         !obj.reference_id.split('+')[1].startsWith('ptyp')),
@@ -203,11 +252,14 @@ export const validateCommissionRule = (obj: AdminCreateCommissionRuleType) => {
   ]
 
   if (errors.find((v) => v)) {
+    console.log('[validateCommissionRule] Validation failed - invalid reference_id')
     throw new MedusaError(
       MedusaError.Types.INVALID_DATA,
       'Invalid reference id'
     )
   }
+
+  console.log('[validateCommissionRule] Validation passed')
 }
 
 export const AdminGetCommissionLinesParams = createFindParams({

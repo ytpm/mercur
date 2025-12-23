@@ -4,7 +4,7 @@ import {
   createWorkflow,
 } from "@medusajs/workflows-sdk";
 
-import { CreateCommissionRuleDTO } from "@mercurjs/framework";
+import { CreateCommissionRuleDTO } from "@ytpm/mercurjs-framework";
 
 import { checkForDuplicateStep, createCommissionRuleStep } from "../steps";
 

@@ -1,7 +1,7 @@
 import { SubscriberArgs, SubscriberConfig } from "@medusajs/framework";
 import { ContainerRegistrationKeys } from "@medusajs/framework/utils";
 
-import { OrderSetWorkflowEvents, SELLER_ORDER_LINK } from "@mercurjs/framework";
+import { OrderSetWorkflowEvents, SELLER_ORDER_LINK } from "@ytpm/mercurjs-framework";
 import { calculateCommissionWorkflow } from "../workflows/commission/workflows";
 
 export default async function commissionOrderSetPlacedHandler({

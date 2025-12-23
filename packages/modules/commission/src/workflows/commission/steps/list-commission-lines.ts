@@ -6,7 +6,7 @@ import {
   COMMISSION_MODULE,
 } from "../../../modules/commission";
 
-import { SELLER_ORDER_LINK } from "@mercurjs/framework";
+import { SELLER_ORDER_LINK } from "@ytpm/mercurjs-framework";
 
 type Input = {
   expand: boolean;

@@ -2,8 +2,9 @@ import {
   AuthenticatedMedusaRequest,
   MedusaResponse,
 } from "@medusajs/framework";
+import { MedusaError } from "@medusajs/framework/utils";
 
-import { fetchSellerByAuthActorId } from "@mercurjs/framework";
+import { fetchSellerFromRequest } from "@ytpm/mercurjs-framework";
 import { listCommissionLinesWorkflow } from "../../../workflows/commission/workflows";
 
 /**
@@ -92,10 +93,14 @@ export const GET = async (
   req: AuthenticatedMedusaRequest,
   res: MedusaResponse
 ) => {
-  const seller = await fetchSellerByAuthActorId(
-    req.auth_context.actor_id,
-    req.scope
-  );
+  const seller = await fetchSellerFromRequest(req);
+
+  if (!seller) {
+    throw new MedusaError(
+      MedusaError.Types.UNAUTHORIZED,
+      "No active seller found"
+    );
+  }
 
   const {
     result: { lines: commission_lines, count },

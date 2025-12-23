@@ -1,10 +1,14 @@
 {
-  "name": "@mercurjs/commission",
-  "version": "1.4.3",
+  "name": "@ytpm/mercurjs-commission",
+  "version": "1.4.19",
   "author": "MercurJS <hello@mercurjs.com> (https://mercurjs.com)",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mercurjs/mercur"
+    "url": "https://github.com/ytpm/bumpy.fm.git",
+    "directory": "mercur-fork/packages/modules/commission"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
   },
   "license": "MIT",
   "keywords": [
@@ -38,11 +42,10 @@
     "@medusajs/admin-sdk": "2.10.2",
     "@medusajs/cli": "2.10.2",
     "@medusajs/framework": "2.10.2",
+    "@medusajs/icons": "2.10.2",
     "@medusajs/medusa": "2.10.2",
     "@medusajs/test-utils": "2.10.2",
     "@medusajs/ui": "4.0.25",
-    "@medusajs/icons": "2.10.2",
-    "@mercurjs/framework": "*",
     "@mikro-orm/cli": "6.4.3",
     "@mikro-orm/core": "6.4.3",
     "@mikro-orm/knex": "6.4.3",
@@ -52,6 +55,7 @@
     "@types/node": "^20.0.0",
     "@types/react": "^18.3.2",
     "@types/react-dom": "^18.2.25",
+    "@ytpm/mercurjs-framework": "^1.4.6",
     "awilix": "^8.0.1",
     "pg": "^8.13.0",
     "prop-types": "^15.8.1",
@@ -70,7 +74,7 @@
     "@medusajs/medusa": "2.10.2",
     "@medusajs/ui": "4.0.25",
     "@medusajs/icons": "2.10.2",
-    "@mercurjs/framework": "*",
+    "@ytpm/mercurjs-framework": "^1.4.6",
     "@mikro-orm/cli": "6.4.3",
     "@mikro-orm/core": "6.4.3",
     "@mikro-orm/knex": "6.4.3",

@@ -2,7 +2,7 @@ import { MiddlewareRoute } from "@medusajs/medusa";
 import {
   checkResourceOwnershipByResourceId,
   SELLER_ORDER_LINK,
-} from "@mercurjs/framework";
+} from "@ytpm/mercurjs-framework";
 
 export const vendorOrderCommissionMiddlewares: MiddlewareRoute[] = [
   {
