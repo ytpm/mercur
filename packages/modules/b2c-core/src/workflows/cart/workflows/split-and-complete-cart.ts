@@ -282,9 +282,21 @@ export const splitAndCompleteCartWorkflow = createWorkflow(
 
       const createdOrders = createOrdersStep(ordersToCreate);
 
+      /**
+       * Create SplitOrderPayment records for each order.
+       * Includes platform_fee from cart metadata for commission tracking.
+       *
+       * @see docs/active/COMMISSION_RESTRUCTURE_IMPLEMENTATION.md
+       */
       const splitPaymentsToCreate = transform(
-        { createdOrders, resolvedPaymentCollectionId },
-        ({ createdOrders, resolvedPaymentCollectionId }) => {
+        { createdOrders, resolvedPaymentCollectionId, cart },
+        ({ createdOrders, resolvedPaymentCollectionId, cart }) => {
+          // Read platform fee from cart metadata (set during ticket checkout)
+          const platformFee = Number((cart.metadata as any)?.platform_fee) || 0;
+          const platformFeeMode = (cart.metadata as any)?.platform_fee_mode || null;
+
+          console.log(`[splitAndCompleteCart] Platform fee from cart: ${platformFee}, mode: ${platformFeeMode}`);
+
           return createdOrders.map((order) => ({
             order_id: order.id,
             status: "pending",
@@ -294,6 +306,9 @@ export const splitAndCompleteCartWorkflow = createWorkflow(
               order.summary?.accounting_total || 0
             ).toNumber(),
             payment_collection_id: resolvedPaymentCollectionId,
+            // Platform fee for commission tracking
+            platform_fee: platformFee,
+            platform_fee_mode: platformFeeMode,
           }));
         }
       );
