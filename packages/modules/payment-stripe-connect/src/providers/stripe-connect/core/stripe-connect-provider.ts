@@ -159,49 +159,43 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
       `[StripeConnect] Initiating payment: seller=${sellerId}, event=${eventId}, mode=${paymentMode}, requiresApproval=${requiresApproval}`
     );
 
-    // Calculate commission rate from MercurJS commission_rules
-    let commissionRate = DEFAULT_COMMISSION_RATE;
-
-    if (sellerId) {
-      try {
-        // Lookup commission rule using MercurJS commission service
-        // Access via property (cradle proxy) - NOT resolve() which doesn't exist on cradle
-        const commissionService = this.container_?.[COMMISSION_MODULE];
-
-        if (commissionService?.selectCommissionForProductLine) {
-          const commissionRule: CommissionRuleDTO | null =
-            await commissionService.selectCommissionForProductLine({
-              seller_id: sellerId,
-              product_type_id: "", // Optional: could be passed for event-specific rates
-              product_category_id: "", // Optional: could be passed for category rates
-            });
-
-          // Extract rate (percentage_rate is 0-100, convert to decimal)
-          if (commissionRule?.rate?.type === "percentage" && commissionRule.rate.percentage_rate != null) {
-            commissionRate = commissionRule.rate.percentage_rate / 100;
-            console.log(
-              `[StripeConnect] Found commission rule: ${commissionRule.name}, rate=${commissionRate * 100}%`
-            );
-          } else {
-            console.log(
-              `[StripeConnect] No commission rule found, using default ${DEFAULT_COMMISSION_RATE * 100}%`
-            );
-          }
-        } else {
-          console.log("[StripeConnect] Commission service not available, using default rate");
-        }
-      } catch (error) {
-        console.error("[StripeConnect] Error fetching commission rule:", error);
-        // Continue with default rate
-      }
-    }
+    /**
+     * Platform fee handling (Commission Restructure)
+     *
+     * Platform fee is now passed directly from the storefront via cart.metadata.
+     * This bypasses the old MercurJS commission_rules lookup.
+     *
+     * @see docs/active/COMMISSION_RESTRUCTURE_IMPLEMENTATION.md
+     */
+    const platformFee = Number(data?.platform_fee) || 0;
+    const platformFeeMode = (data?.platform_fee_mode as string) || "on_top";
 
     // Convert from major units (e.g., THB, USD) to minor units (satang, cents)
     // MedusaJS stores prices in minor units, Stripe expects minor units
     const amountSmallest = getSmallestUnit(amount, currency_code);
-    const commissionAmount = Math.round(amountSmallest * commissionRate);
+
+    // Convert platform fee to smallest unit
+    // Platform fee is stored in major units in cart.metadata
+    const platformFeeSmallest = getSmallestUnit(platformFee, currency_code);
 
     console.log(`[StripeConnect] Amount conversion: input=${amount}, amountSmallest=${amountSmallest}`);
+    console.log(`[StripeConnect] Platform fee: ${platformFee} (${platformFeeSmallest} smallest), mode: ${platformFeeMode}`);
+
+    // === DEPRECATED: Old commission service lookup ===
+    // The following code used MercurJS commission_rules to calculate commission.
+    // Now using event-level commission passed via platform_fee.
+    // Kept for reference only.
+    //
+    // let commissionRate = DEFAULT_COMMISSION_RATE;
+    // if (sellerId) {
+    //   const commissionService = this.container_?.[COMMISSION_MODULE];
+    //   if (commissionService?.selectCommissionForProductLine) {
+    //     const commissionRule = await commissionService.selectCommissionForProductLine({...});
+    //     commissionRate = commissionRule.rate.percentage_rate / 100;
+    //   }
+    // }
+    // const commissionAmount = Math.round(amountSmallest * commissionRate);
+    // === END DEPRECATED ===
 
     // Build payment intent params
     // CRITICAL: session_id MUST be included in metadata for webhook handler to work correctly
@@ -237,8 +231,10 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
         event_number: eventNumber || "",
         payment_mode: paymentMode,
         platform: "bumpy.fm",
-        // Store commission rate for updatePayment recalculation
-        commission_rate: String(commissionRate),
+        // Platform fee for commission tracking (replaces old commission_rate)
+        // @see docs/active/COMMISSION_RESTRUCTURE_IMPLEMENTATION.md
+        platform_fee: String(platformFee),
+        platform_fee_mode: platformFeeMode,
         // Track if approval is required for webhook handling and downstream processing
         requires_approval: requiresApproval ? "true" : "false",
       },
@@ -249,17 +245,18 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
       paymentIntentInput.transfer_data = {
         destination: stripeAccountId,
       };
-      // Commission taken automatically at payment time via application_fee_amount
-      paymentIntentInput.application_fee_amount = commissionAmount;
+      // Platform fee taken automatically at payment time via application_fee_amount
+      // Uses the pre-calculated platform_fee from event commission settings
+      paymentIntentInput.application_fee_amount = platformFeeSmallest;
 
       console.log(
-        `[StripeConnect] Connect mode: destination=${stripeAccountId}, fee=${commissionAmount} (${commissionRate * 100}%)`
+        `[StripeConnect] Connect mode: destination=${stripeAccountId}, fee=${platformFeeSmallest} (${platformFee} major units)`
       );
     } else {
       // Platform mode: No transfer_data, full amount goes to platform account
-      // Commission tracked via MercurJS commission_lines (created on order.placed)
+      // Platform fee tracked on SplitOrderPayment for payout calculation
       console.log(
-        `[StripeConnect] Platform mode: amount=${amountSmallest}, commission will be tracked separately`
+        `[StripeConnect] Platform mode: amount=${amountSmallest}, platform_fee=${platformFee} tracked on order`
       );
     }
 
@@ -363,6 +360,16 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
     return this.cancelPayment(data);
   }
 
+  /**
+   * Refund a payment through Stripe Connect.
+   *
+   * Commission Restructure:
+   * - For full refunds, we refund the application_fee_amount back to the customer
+   * - For partial refunds, we don't refund the platform fee (proportional refund is complex)
+   * - The platform_fee was added "on_top" of the ticket price
+   *
+   * @see docs/active/COMMISSION_RESTRUCTURE_IMPLEMENTATION.md
+   */
   async refundPayment({
     data: paymentSessionData,
     amount,
@@ -373,10 +380,33 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
       // Convert refund amount from major units to minor units
       const currency = paymentSessionData?.currency as string;
       const amountNumeric = getSmallestUnit(amount, currency);
+
+      console.log(`[StripeConnect] Refunding payment: ${id}, amount: ${amount} (${amountNumeric} smallest units)`);
+
+      // Retrieve the PaymentIntent to check if this is a full refund
+      const paymentIntent = await this.client_.paymentIntents.retrieve(id);
+      const capturedAmount = paymentIntent.amount_received || paymentIntent.amount;
+      const isFullRefund = amountNumeric >= capturedAmount;
+
+      console.log(`[StripeConnect] PaymentIntent captured: ${capturedAmount}, refund: ${amountNumeric}, isFullRefund: ${isFullRefund}`);
+
+      /**
+       * Stripe Connect Refund Options:
+       * - refund_application_fee: true = Refund the platform's application_fee_amount
+       * - reverse_transfer: true = Reverse the transfer to the connected account
+       *
+       * For full refunds, we refund the application fee (platform fee) as well.
+       * For partial refunds, we only refund from the connected account (vendor's portion).
+       */
       await this.client_.refunds.create({
         amount: amountNumeric,
         payment_intent: id as string,
+        // For full refunds, refund the application fee (platform fee)
+        // This returns the platform fee to the customer
+        refund_application_fee: isFullRefund,
       });
+
+      console.log(`[StripeConnect] Refund created successfully, refund_application_fee: ${isFullRefund}`);
     } catch (e) {
       throw this.buildError("An error occurred in refundPayment", e);
     }
@@ -429,18 +459,26 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
       };
 
       // Recalculate application_fee_amount if this is a Connect payment
-      // Uses commission_rate stored in metadata during initiatePayment
+      // NOTE: With the new commission restructure, the platform_fee is a fixed amount
+      // (not a percentage), so we don't need to recalculate it when the amount changes.
+      // The fee was already calculated based on the original ticket prices.
+      //
+      // However, if the cart total changes (e.g., coupon applied), we may need to
+      // adjust the fee proportionally. For now, we keep the original fee.
+      //
+      // @see docs/active/COMMISSION_RESTRUCTURE_IMPLEMENTATION.md
       const paymentMode = data?.metadata?.payment_mode;
-      const commissionRateStr = data?.metadata?.commission_rate;
-      const commissionRate = commissionRateStr ? parseFloat(commissionRateStr) : 0;
+      const platformFeeStr = data?.metadata?.platform_fee;
+      const platformFee = platformFeeStr ? parseFloat(platformFeeStr) : 0;
 
-      if (paymentMode === PAYMENT_MODES.STRIPE_CONNECT && commissionRate > 0) {
-        // Recalculate fee based on new amount
-        const newFee = Math.round(amountNumeric * commissionRate);
-        updateParams.application_fee_amount = newFee;
+      if (paymentMode === PAYMENT_MODES.STRIPE_CONNECT && platformFee > 0) {
+        // Convert platform fee to smallest unit
+        const currency = data?.currency as string || "usd";
+        const platformFeeSmallest = getSmallestUnit(platformFee, currency);
+        updateParams.application_fee_amount = platformFeeSmallest;
 
         console.log(
-          `[StripeConnect] Updating payment ${id}: amount=${amountNumeric}, fee=${newFee} (${commissionRate * 100}%)`
+          `[StripeConnect] Updating payment ${id}: amount=${amountNumeric}, fee=${platformFeeSmallest} (${platformFee} major units)`
         );
       } else {
         console.log(`[StripeConnect] Updating payment ${id}: amount=${amountNumeric}`);
