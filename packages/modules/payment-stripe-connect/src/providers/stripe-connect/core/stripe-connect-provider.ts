@@ -58,6 +58,20 @@ const DEFAULT_COMMISSION_RATE = 0.1;
 /** Commission module identifier for container resolution */
 const COMMISSION_MODULE = "commission";
 
+/** Payment gateway module identifier for webhook secret lookup */
+const PAYMENT_GATEWAY_MODULE = "paymentGateway";
+
+/**
+ * Gateway credentials injected by middleware for multi-gateway support.
+ * @see backend/src/api/middlewares/inject-gateway-credentials.ts
+ */
+interface GatewayCredentials {
+  gateway_id: string;
+  secret_key: string;
+  webhook_secret: string;
+  publishable_key?: string;
+}
+
 type Options = {
   apiKey: string;
   webhookSecret: string;
@@ -65,9 +79,15 @@ type Options = {
 
 abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
   private readonly options_: Options;
-  private readonly client_: Stripe;
+  private readonly defaultClient_: Stripe;
   /** Container reference for accessing MedusaJS services like commission module */
   protected readonly container_: any;
+
+  /**
+   * Cache of Stripe clients by gateway_id to avoid recreating.
+   * Each gateway with different credentials gets its own cached client.
+   */
+  private clientCache_: Map<string, Stripe> = new Map();
 
   constructor(container, options: Options) {
     super(container);
@@ -75,7 +95,92 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
     this.container_ = container;
     this.options_ = options;
 
-    this.client_ = new Stripe(options.apiKey);
+    // Default client uses environment variable credentials (fallback)
+    this.defaultClient_ = new Stripe(options.apiKey);
+  }
+
+  /**
+   * Get Stripe client for the given credentials.
+   * Uses cache to avoid creating multiple clients for same gateway.
+   *
+   * @param credentials - Gateway credentials from data field (optional)
+   * @returns Stripe client instance
+   *
+   * @remarks
+   * If credentials are provided, creates/retrieves a cached client for that gateway.
+   * If no credentials, falls back to the default client (env var credentials).
+   */
+  private getClient(credentials?: GatewayCredentials): Stripe {
+    // No credentials = use default client (backward compatible)
+    if (!credentials?.secret_key) {
+      console.log("[StripeConnect] Using default client (no gateway credentials)");
+      return this.defaultClient_;
+    }
+
+    const cacheKey = credentials.gateway_id;
+
+    // Check cache first
+    if (this.clientCache_.has(cacheKey)) {
+      console.log(`[StripeConnect] Using cached client for gateway: ${cacheKey}`);
+      return this.clientCache_.get(cacheKey)!;
+    }
+
+    // Create new client and cache it
+    const client = new Stripe(credentials.secret_key);
+    this.clientCache_.set(cacheKey, client);
+    console.log(`[StripeConnect] Created new Stripe client for gateway: ${cacheKey}`);
+    return client;
+  }
+
+  /**
+   * Cache for webhook secrets by gateway_id.
+   * Populated during payment initiation for use in webhook verification.
+   * This avoids async lookups during synchronous webhook signature verification.
+   */
+  private webhookSecretCache_: Map<string, string> = new Map();
+
+  /**
+   * Cache a webhook secret for later use in webhook verification.
+   * Called during initiatePayment when gateway credentials are provided.
+   *
+   * @param gatewayId - Gateway ID
+   * @param webhookSecret - Webhook secret for this gateway
+   */
+  public cacheWebhookSecret(gatewayId: string, webhookSecret: string): void {
+    this.webhookSecretCache_.set(gatewayId, webhookSecret);
+    console.log(`[StripeConnect] Cached webhook secret for gateway: ${gatewayId}`);
+  }
+
+  /**
+   * Get webhook secret for webhook verification.
+   * Uses cached secrets populated during payment initiation.
+   *
+   * @param gatewayId - Gateway ID from PaymentIntent metadata
+   * @returns Webhook secret string
+   *
+   * @remarks
+   * Webhook secrets are cached during initiatePayment when gateway credentials
+   * are injected by the middleware. This allows synchronous webhook verification
+   * without needing to query the database.
+   *
+   * For multi-gateway support, each gateway's webhook secret is cached when
+   * a payment is initiated. If the gateway_id is not found in cache, falls
+   * back to the default webhook secret from environment variables.
+   */
+  private getWebhookSecret(gatewayId?: string): string {
+    // Check cache first (populated during initiatePayment)
+    if (gatewayId && this.webhookSecretCache_.has(gatewayId)) {
+      console.log(`[StripeConnect] Using cached webhook secret for gateway: ${gatewayId}`);
+      return this.webhookSecretCache_.get(gatewayId)!;
+    }
+
+    // Fallback to default webhook secret
+    if (gatewayId) {
+      console.log(`[StripeConnect] Gateway ${gatewayId} not in cache, using default webhook secret`);
+    } else {
+      console.log("[StripeConnect] No gateway_id, using default webhook secret");
+    }
+    return this.options_.webhookSecret;
   }
 
   abstract get paymentIntentOptions(): PaymentIntentOptions;
@@ -84,7 +189,10 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
     input: GetPaymentStatusInput
   ): Promise<GetPaymentStatusOutput> {
     const id = input.data?.id as string;
-    const paymentIntent = await this.client_.paymentIntents.retrieve(id);
+    // Use gateway credentials if available, otherwise default client
+    const gatewayCredentials = input.data?.gateway_credentials as GatewayCredentials | undefined;
+    const client = this.getClient(gatewayCredentials);
+    const paymentIntent = await client.paymentIntents.retrieve(id);
     const dataResponse = paymentIntent as unknown as Record<string, unknown>;
 
     switch (paymentIntent.status) {
@@ -139,6 +247,17 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
     console.log(`[StripeConnect] data: ${JSON.stringify(data, null, 2)}`);
     console.log(`[StripeConnect] full input keys: ${Object.keys(input).join(', ')}`);
     console.log(`[StripeConnect] === END DEBUG ===`);
+
+    // Extract gateway credentials injected by middleware (multi-gateway support)
+    // @see backend/src/api/middlewares/inject-gateway-credentials.ts
+    const gatewayCredentials = data?.gateway_credentials as GatewayCredentials | undefined;
+    const client = this.getClient(gatewayCredentials);
+
+    // Cache webhook secret for later webhook verification
+    // This allows synchronous signature verification without database lookup
+    if (gatewayCredentials?.gateway_id && gatewayCredentials?.webhook_secret) {
+      this.cacheWebhookSecret(gatewayCredentials.gateway_id, gatewayCredentials.webhook_secret);
+    }
 
     // Customer email comes from context (auto-populated by Medusa)
     const email = context?.customer?.email;
@@ -237,6 +356,9 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
         platform_fee_mode: platformFeeMode,
         // Track if approval is required for webhook handling and downstream processing
         requires_approval: requiresApproval ? "true" : "false",
+        // Gateway ID for webhook secret lookup (multi-gateway support)
+        // @see backend/src/modules/payment-gateway
+        gateway_id: gatewayCredentials?.gateway_id || "",
       },
     };
 
@@ -264,7 +386,7 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
     try {
       const {
         data: [customer],
-      } = await this.client_.customers.list({
+      } = await client.customers.list({
         email,
         limit: 1,
       });
@@ -281,7 +403,7 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
 
     if (!paymentIntentInput.customer) {
       try {
-        const customer = await this.client_.customers.create({ email });
+        const customer = await client.customers.create({ email });
         paymentIntentInput.customer = customer.id;
       } catch (error) {
         throw this.buildError(
@@ -293,7 +415,7 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
 
     // Create the payment intent
     try {
-      const data = (await this.client_.paymentIntents.create(
+      const data = (await client.paymentIntents.create(
         paymentIntentInput
       )) as any;
 
@@ -332,7 +454,11 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
         return { data: paymentSessionData };
       }
 
-      const data = (await this.client_.paymentIntents.cancel(id)) as any;
+      // Use gateway credentials if available
+      const gatewayCredentials = paymentSessionData?.gateway_credentials as GatewayCredentials | undefined;
+      const client = this.getClient(gatewayCredentials);
+
+      const data = (await client.paymentIntents.cancel(id)) as any;
       return { data };
     } catch (error) {
       throw this.buildError("An error occurred in cancelPayment", error);
@@ -343,8 +469,12 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
     data: paymentSessionData,
   }: CapturePaymentInput): Promise<CapturePaymentOutput> {
     const id = paymentSessionData?.id as string;
+    // Use gateway credentials if available
+    const gatewayCredentials = paymentSessionData?.gateway_credentials as GatewayCredentials | undefined;
+    const client = this.getClient(gatewayCredentials);
+
     try {
-      const data = (await this.client_.paymentIntents.capture(id)) as any;
+      const data = (await client.paymentIntents.capture(id)) as any;
       return { data };
     } catch (error) {
       if (error.code === ErrorCodes.PAYMENT_INTENT_UNEXPECTED_STATE) {
@@ -376,6 +506,10 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
   }: RefundPaymentInput): Promise<RefundPaymentOutput> {
     const id = paymentSessionData?.id as string;
 
+    // Use gateway credentials if available
+    const gatewayCredentials = paymentSessionData?.gateway_credentials as GatewayCredentials | undefined;
+    const client = this.getClient(gatewayCredentials);
+
     try {
       // Convert refund amount from major units to minor units
       const currency = paymentSessionData?.currency as string;
@@ -384,7 +518,7 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
       console.log(`[StripeConnect] Refunding payment: ${id}, amount: ${amount} (${amountNumeric} smallest units)`);
 
       // Retrieve the PaymentIntent to check if this is a full refund
-      const paymentIntent = await this.client_.paymentIntents.retrieve(id);
+      const paymentIntent = await client.paymentIntents.retrieve(id);
       const capturedAmount = paymentIntent.amount_received || paymentIntent.amount;
       const isFullRefund = amountNumeric >= capturedAmount;
 
@@ -398,7 +532,7 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
        * For full refunds, we refund the application fee (platform fee) as well.
        * For partial refunds, we only refund from the connected account (vendor's portion).
        */
-      await this.client_.refunds.create({
+      await client.refunds.create({
         amount: amountNumeric,
         payment_intent: id as string,
         // For full refunds, refund the application fee (platform fee)
@@ -417,9 +551,13 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
   async retrievePayment({
     data: paymentSessionData,
   }: RetrievePaymentInput): Promise<RetrievePaymentOutput> {
+    // Use gateway credentials if available
+    const gatewayCredentials = paymentSessionData?.gateway_credentials as GatewayCredentials | undefined;
+    const client = this.getClient(gatewayCredentials);
+
     try {
       const id = paymentSessionData?.id as string;
-      const intent = (await this.client_.paymentIntents.retrieve(id)) as any;
+      const intent = (await client.paymentIntents.retrieve(id)) as any;
 
       // Convert from Stripe's minor units back to major units for MedusaJS display
       intent.amount = getAmountFromSmallestUnit(intent.amount, intent.currency);
@@ -449,6 +587,10 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
     if (isPresent(amount) && data?.amount === amountNumeric) {
       return { data };
     }
+
+    // Use gateway credentials if available
+    const gatewayCredentials = data?.gateway_credentials as GatewayCredentials | undefined;
+    const client = this.getClient(gatewayCredentials);
 
     try {
       const id = data?.id as string;
@@ -484,7 +626,7 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
         console.log(`[StripeConnect] Updating payment ${id}: amount=${amountNumeric}`);
       }
 
-      const sessionData = (await this.client_.paymentIntents.update(id, updateParams)) as any;
+      const sessionData = (await client.paymentIntents.update(id, updateParams)) as any;
 
       return { data: sessionData };
     } catch (e) {
@@ -493,6 +635,9 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
   }
 
   async updatePaymentData(sessionId: string, data: Record<string, unknown>) {
+    // Use default client for updatePaymentData (no credentials context available)
+    const client = this.defaultClient_;
+
     try {
       // Prevent from updating the amount from here as it should go through
       // the updatePayment method to perform the correct logic
@@ -503,7 +648,7 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
         );
       }
 
-      return (await this.client_.paymentIntents.update(sessionId, {
+      return (await client.paymentIntents.update(sessionId, {
         ...data,
       })) as any;
     } catch (e) {
@@ -552,13 +697,41 @@ abstract class StripeConnectProvider extends AbstractPaymentProvider<Options> {
     }
   }
 
+  /**
+   * Constructs and verifies a Stripe webhook event.
+   *
+   * Multi-gateway support:
+   * - Attempts to parse the raw payload to extract gateway_id from PaymentIntent metadata
+   * - Uses gateway-specific webhook secret if gateway_id is found
+   * - Falls back to default webhook secret for backwards compatibility
+   *
+   * @param data - Webhook payload containing raw data, headers, and signature
+   * @returns Verified Stripe event
+   */
   constructWebhookEvent(data: ProviderWebhookPayload["payload"]): Stripe.Event {
     const signature = data.headers["stripe-signature"] as string;
+    const rawData = data.rawData as string | Buffer;
 
-    return this.client_.webhooks.constructEvent(
-      data.rawData as string | Buffer,
+    // Attempt to extract gateway_id from the payload for dynamic webhook secret lookup
+    let gatewayId: string | undefined;
+    try {
+      const payload = typeof rawData === "string" ? JSON.parse(rawData) : JSON.parse(rawData.toString());
+      // PaymentIntent metadata contains gateway_id set during initiatePayment
+      gatewayId = payload?.data?.object?.metadata?.gateway_id;
+      if (gatewayId) {
+        console.log(`[StripeConnect] Webhook: found gateway_id in metadata: ${gatewayId}`);
+      }
+    } catch (e) {
+      console.log("[StripeConnect] Webhook: could not parse payload for gateway_id");
+    }
+
+    // Get the appropriate webhook secret (gateway-specific or default)
+    const webhookSecret = this.getWebhookSecret(gatewayId);
+
+    return this.defaultClient_.webhooks.constructEvent(
+      rawData,
       signature,
-      this.options_.webhookSecret
+      webhookSecret
     );
   }
 
